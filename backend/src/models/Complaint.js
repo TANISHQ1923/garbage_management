@@ -42,6 +42,40 @@ const aiAnalysisSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const feedbackSchema = new mongoose.Schema(
+  {
+    rating: {
+      type: Number,
+      required: [true, 'Rating is required'],
+      min: [1, 'Rating must be at least 1 star'],
+      max: [5, 'Rating cannot exceed 5 stars'],
+      validate: {
+        validator: Number.isInteger,
+        message: 'Rating must be an integer between 1 and 5'
+      }
+    },
+    comment: {
+      type: String,
+      maxlength: [500, 'Comment cannot exceed 500 characters'],
+      trim: true,
+      default: ''
+    },
+    submittedAt: {
+      type: Number,
+      default: () => Date.now()
+    },
+    citizenId: {
+      type: String,
+      required: true
+    },
+    citizenName: {
+      type: String,
+      default: ''
+    }
+  },
+  { _id: false }
+);
+
 const complaintSchema = new mongoose.Schema(
   {
     complaintId: {
@@ -176,6 +210,11 @@ const complaintSchema = new mongoose.Schema(
       type: String,
       enum: ['PENDING', 'COMPLETED', 'FAILED', 'AI_UNAVAILABLE'],
       default: 'PENDING'
+    },
+    // Citizen Cleanup Feedback
+    feedback: {
+      type: feedbackSchema,
+      default: null
     }
   },
   {

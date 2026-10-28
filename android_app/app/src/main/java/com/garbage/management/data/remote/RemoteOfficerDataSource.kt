@@ -13,6 +13,21 @@ import org.json.JSONObject
  */
 class RemoteOfficerDataSource(private val apiService: ApiService) {
 
+    suspend fun getPriorityQueue(): Resource<List<GarbageComplaint>> {
+        return try {
+            val response = apiService.getPriorityQueue()
+            if (response.isSuccessful && response.body()?.data != null) {
+                val list = response.body()!!.data!!.map { it.toDomain() }
+                Resource.Success(list)
+            } else {
+                val errorMsg = parseErrorMessage(response.errorBody()?.string(), response.message())
+                Resource.Error(errorMsg)
+            }
+        } catch (e: Exception) {
+            Resource.Error(e.localizedMessage ?: "Failed to fetch priority queue.")
+        }
+    }
+
     suspend fun getAllComplaints(
         search: String? = null,
         status: String? = null,

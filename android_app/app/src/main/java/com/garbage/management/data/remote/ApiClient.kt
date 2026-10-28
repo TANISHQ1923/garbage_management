@@ -29,7 +29,15 @@ object ApiClient {
             val original = chain.request()
             val token = sessionManager?.let {
                 try {
-                    runBlocking { it.getToken() }
+                    runBlocking {
+                        val saved = it.getToken()
+                        if (!saved.isNullOrBlank()) {
+                            saved
+                        } else {
+                            val user = it.getSavedSession()
+                            if (user != null) "mock-token-${user.id.ifBlank { "mock-citizen-001" }}" else null
+                        }
+                    }
                 } catch (e: Exception) {
                     null
                 }
@@ -42,10 +50,37 @@ object ApiClient {
             chain.proceed(requestBuilder.build())
         }
 
+        val hostFallbackInterceptor = Interceptor { chain ->
+            val request = chain.request()
+            try {
+                chain.proceed(request)
+            } catch (e: java.io.IOException) {
+                val originalHost = request.url.host
+                val candidateHosts = if (Constants.isEmulator()) {
+                    listOf("10.0.2.2", Constants.DEV_MACHINE_IP, "127.0.0.1")
+                } else {
+                    listOf(Constants.DEV_MACHINE_IP, "127.0.0.1", "10.0.2.2")
+                }.distinct().filter { it != originalHost }
+
+                var lastException: java.io.IOException = e
+                for (altHost in candidateHosts) {
+                    val fallbackUrl = request.url.newBuilder().host(altHost).build()
+                    val fallbackRequest = request.newBuilder().url(fallbackUrl).build()
+                    try {
+                        return@Interceptor chain.proceed(fallbackRequest)
+                    } catch (altEx: java.io.IOException) {
+                        lastException = altEx
+                    }
+                }
+                throw lastException
+            }
+        }
+
         val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(hostFallbackInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(Constants.TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .connectTimeout(10L, TimeUnit.SECONDS)
             .readTimeout(Constants.TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .writeTimeout(Constants.TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()

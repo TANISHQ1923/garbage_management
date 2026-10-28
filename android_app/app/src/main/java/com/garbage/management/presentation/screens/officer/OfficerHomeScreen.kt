@@ -63,6 +63,7 @@ import com.garbage.management.domain.model.AuthState
 import com.garbage.management.domain.model.ComplaintStatus
 import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
+import com.garbage.management.presentation.components.PriorityLevelBadge
 import com.garbage.management.presentation.components.RoleBadge
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
@@ -141,6 +142,36 @@ fun OfficerHomeScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
+                // 0. ERROR BANNER IF AVAILABLE
+                if (dashboardState.error != null) {
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = dashboardState.error ?: "Unable to load dashboard data. Please check the server connection.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TextButton(onClick = { officerViewModel.loadOfficerDashboard() }) {
+                                    Text("Retry", color = MaterialTheme.colorScheme.onErrorContainer)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 1. OFFICER IDENTITY HEADER
                 item {
                     OfficerHeaderCard(
@@ -152,13 +183,35 @@ fun OfficerHomeScreen(
 
                 // 2. SUMMARY METRICS
                 item {
-                    Text(
-                        text = "Municipal Overview",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Municipal Overview",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        if (dashboardState.isSynthetic) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Text(
+                                    text = "Synthetic Demo Data",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
                     Spacer(modifier = Modifier.height(10.dp))
                     OfficerMetricsGrid(
                         metrics = dashboardState.metrics,
+                        availableDriversCount = dashboardState.availableDriversCount,
+                        totalDriversCount = dashboardState.totalDriversCount,
                         onMetricClick = { filter -> onNavigateToAllComplaints(filter) }
                     )
                 }
@@ -418,9 +471,12 @@ fun OfficerHeaderCard(
 @Composable
 fun OfficerMetricsGrid(
     metrics: OfficerMetrics,
+    availableDriversCount: Int = 0,
+    totalDriversCount: Int = 0,
     onMetricClick: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Row 1: Total, Emergency, Submitted
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -452,6 +508,7 @@ fun OfficerMetricsGrid(
             )
         }
 
+        // Row 2: Assigned, In Progress, Cleaned
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -481,6 +538,13 @@ fun OfficerMetricsGrid(
                 onClick = { onMetricClick("Cleaned") },
                 modifier = Modifier.weight(1f)
             )
+        }
+
+        // Row 3: Verified, Rejected, Available Drivers
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             OfficerMetricTile(
                 title = "VERIFIED",
                 count = metrics.verified,
@@ -488,6 +552,24 @@ fun OfficerMetricsGrid(
                 containerColor = Color(0xFFE0F2F1),
                 contentColor = Color(0xFF00695C),
                 onClick = { onMetricClick("Verified") },
+                modifier = Modifier.weight(1f)
+            )
+            OfficerMetricTile(
+                title = "REJECTED",
+                count = metrics.rejected,
+                icon = Icons.Default.ErrorOutline,
+                containerColor = Color(0xFFFFEBEE),
+                contentColor = Color(0xFFC62828),
+                onClick = { onMetricClick("Rejected") },
+                modifier = Modifier.weight(1f)
+            )
+            OfficerMetricTile(
+                title = "DRIVERS",
+                count = availableDriversCount,
+                icon = Icons.Default.Engineering,
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                contentColor = MaterialTheme.colorScheme.primary,
+                onClick = { onMetricClick("Assigned") },
                 modifier = Modifier.weight(1f)
             )
         }
@@ -564,10 +646,18 @@ fun OfficerPriorityCard(
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                if (complaint.isEmergency) {
-                    EmergencyPriorityBadge()
-                } else {
-                    OfficerStatusBadge(status = complaint.status)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    complaint.priorityLevel?.let { level ->
+                        PriorityLevelBadge(priorityLevel = level, priorityScore = complaint.priorityScore)
+                    }
+                    if (complaint.isEmergency) {
+                        EmergencyPriorityBadge()
+                    } else {
+                        OfficerStatusBadge(status = complaint.status)
+                    }
                 }
             }
 

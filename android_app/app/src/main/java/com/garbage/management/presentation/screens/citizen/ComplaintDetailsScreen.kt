@@ -18,26 +18,38 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,12 +57,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.garbage.management.domain.model.AuthState
+import com.garbage.management.domain.model.CleanupFeedback
+import com.garbage.management.domain.model.ComplaintStatus
 import com.garbage.management.presentation.components.AppTopBar
 import com.garbage.management.presentation.components.ComplaintStatusBadge
 import com.garbage.management.presentation.components.StatusTimelineView
 import com.garbage.management.presentation.components.UriImageViewer
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
+import com.garbage.management.presentation.viewmodel.AuthViewModel
 import com.garbage.management.presentation.viewmodel.ComplaintViewModel
 import java.util.Locale
 
@@ -60,11 +76,15 @@ fun ComplaintDetailsScreen(
     complaintId: String,
     viewModel: ComplaintViewModel,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    authViewModel: AuthViewModel? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val state by viewModel.complaintDetailUiState.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
+
+    val authState = authViewModel?.authState?.collectAsStateWithLifecycle()?.value
+    val currentUser = (authState as? AuthState.Authenticated)?.user
 
     LaunchedEffect(complaintId) {
         viewModel.loadComplaintDetails(complaintId)
@@ -474,6 +494,38 @@ fun ComplaintDetailsScreen(
                     }
                 }
 
+                val isOwner = currentUser != null && (
+                    complaint.citizenId == currentUser.id ||
+                    (currentUser.role.name == "CITIZEN" && (
+                        (currentUser.id == "67b300000000000000000001" && complaint.citizenId == "65f100000000000000000001") ||
+                        (currentUser.id == "mock-citizen-001" && (complaint.citizenId == "65f100000000000000000001" || complaint.citizenId == "mock-citizen-001")) ||
+                        (currentUser.email == "citizen@example.com" && complaint.citizenId == "65f100000000000000000001")
+                    ))
+                )
+
+                // CITIZEN CLEANUP FEEDBACK SECTION
+                val complaintFeedback = complaint.feedback
+                if (complaintFeedback != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SubmittedFeedbackCard(feedback = complaintFeedback)
+                } else if (complaint.status == ComplaintStatus.VERIFIED && isOwner) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CitizenFeedbackSubmissionCard(
+                        isSubmitting = state.isSubmittingFeedback,
+                        feedbackError = state.feedbackError,
+                        feedbackSuccess = state.feedbackSuccess,
+                        onSubmit = { rating, comment ->
+                            viewModel.submitFeedback(
+                                complaintId = complaint.id,
+                                rating = rating,
+                                comment = comment,
+                                citizenId = currentUser?.id,
+                                citizenName = currentUser?.name
+                            )
+                        }
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
@@ -648,6 +700,317 @@ fun CitizenAiAnalysisCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
             )
+        }
+    }
+}
+
+@Composable
+fun SubmittedFeedbackCard(
+    feedback: CleanupFeedback
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = Color(0xFFFFB300),
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Citizen Cleanup Feedback",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFE8F5E9)
+                ) {
+                    Text(
+                        text = "Submitted",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFF2E7D32),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Rating Stars Display
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                for (i in 1..5) {
+                    Icon(
+                        imageVector = if (i <= feedback.rating) Icons.Default.Star else Icons.Outlined.StarBorder,
+                        contentDescription = null,
+                        tint = if (i <= feedback.rating) Color(0xFFFFB300) else MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.size(26.dp)
+                    )
+                    if (i < 5) Spacer(modifier = Modifier.width(4.dp))
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                val ratingLabel = when (feedback.rating) {
+                    1 -> "Poor"
+                    2 -> "Fair"
+                    3 -> "Good"
+                    4 -> "Very Good"
+                    5 -> "Excellent"
+                    else -> "${feedback.rating}/5 Stars"
+                }
+                Text(
+                    text = "${feedback.rating}/5 — $ratingLabel",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (feedback.comment.isNotBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "\"${feedback.comment}\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Submitted on ${formatTimestamp(feedback.submittedAt)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun CitizenFeedbackSubmissionCard(
+    isSubmitting: Boolean,
+    feedbackError: String?,
+    feedbackSuccess: Boolean,
+    onSubmit: (rating: Int, comment: String) -> Unit
+) {
+    var selectedRating by remember { mutableIntStateOf(0) }
+    var commentText by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.RateReview,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Citizen Cleanup Feedback",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "The municipal team has verified this cleanup. Please rate the quality of service provided.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 5 Selectable Stars
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for (i in 1..5) {
+                    IconButton(
+                        onClick = {
+                            if (!isSubmitting) {
+                                selectedRating = i
+                                validationError = null
+                            }
+                        },
+                        enabled = !isSubmitting,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (i <= selectedRating) Icons.Default.Star else Icons.Outlined.StarBorder,
+                            contentDescription = "Rate $i stars",
+                            tint = if (i <= selectedRating) Color(0xFFFFB300) else MaterialTheme.colorScheme.outlineVariant,
+                            modifier = Modifier.size(34.dp)
+                        )
+                    }
+                }
+            }
+
+            // Rating description label
+            val ratingLabel = when (selectedRating) {
+                1 -> "1 Star — Poor"
+                2 -> "2 Stars — Fair"
+                3 -> "3 Stars — Good"
+                4 -> "4 Stars — Very Good"
+                5 -> "5 Stars — Excellent"
+                else -> "Tap a star to rate (1–5)"
+            }
+            Text(
+                text = ratingLabel,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selectedRating > 0) FontWeight.Bold else FontWeight.Normal
+                ),
+                color = if (selectedRating > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Optional comment field
+            OutlinedTextField(
+                value = commentText,
+                onValueChange = {
+                    if (it.length <= 500) {
+                        commentText = it
+                    }
+                },
+                label = { Text("Comments / Driver Appreciation (Optional)") },
+                placeholder = { Text("Share details about the cleanup quality or response time...") },
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = 4,
+                enabled = !isSubmitting,
+                supportingText = {
+                    Text(
+                        text = "${commentText.length}/500",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End
+                    )
+                }
+            )
+
+            // Validation / Network Error Display
+            val activeError = validationError ?: feedbackError
+            if (activeError != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = activeError,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+
+            // Success Confirmation Banner
+            if (feedbackSuccess) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFE8F5E9),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Feedback submitted successfully! Thank you.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = Color(0xFF1B5E20)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Submit Button
+            Button(
+                onClick = {
+                    if (selectedRating == 0) {
+                        validationError = "Please select a star rating from 1 to 5."
+                        return@Button
+                    }
+                    validationError = null
+                    onSubmit(selectedRating, commentText)
+                },
+                enabled = !isSubmitting && selectedRating > 0,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Submitting Feedback...")
+                } else {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Submit Feedback")
+                }
+            }
         }
     }
 }

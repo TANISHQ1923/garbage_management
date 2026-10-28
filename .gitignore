@@ -51,3 +51,11 @@ app.*.map.json
 android_app/app/build/
 android_app/.gradle/
 android_app/build/
+
+
+# Machine-specific Android SDK configuration
+local.properties
+android_app/local.properties
+
+# Backend synthetic runtime data
+backend/src/data/synthetic/runtime-data.json

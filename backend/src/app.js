@@ -12,6 +12,7 @@ const officerRoutes = require('./routes/officerRoutes');
 const driverRoutes = require('./routes/driverRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const mediaRoutes = require('./routes/mediaRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Middleware imports
 const { notFoundHandler, errorHandler } = require('./middleware/errorMiddleware');
@@ -59,6 +60,7 @@ app.use('/api/officer', officerRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Catch-all 404 handler
 app.use(notFoundHandler);

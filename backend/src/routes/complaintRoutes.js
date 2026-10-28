@@ -4,7 +4,8 @@ const {
   getMyComplaints,
   getComplaintById,
   requestEmergency,
-  analyzeComplaintWithAi
+  analyzeComplaintWithAi,
+  submitCleanupFeedback
 } = require('../controllers/complaintController');
 const { authenticate } = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
@@ -20,5 +21,6 @@ router.get('/my', requireRole('CITIZEN'), getMyComplaints);
 router.get('/:id', getComplaintById);
 router.post('/:id/emergency', requireRole('CITIZEN'), requestEmergency);
 router.post('/:id/analyze-ai', analyzeComplaintWithAi);
+router.post('/:id/feedback', requireRole('CITIZEN'), submitCleanupFeedback);
 
 module.exports = router;

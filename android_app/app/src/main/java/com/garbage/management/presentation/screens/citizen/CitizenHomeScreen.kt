@@ -35,6 +35,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +45,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -89,8 +91,13 @@ fun CitizenHomeScreen(
     val currentUser = (authState as? AuthState.Authenticated)?.user
 
     val complaintsState by complaintViewModel.complaintsListUiState.collectAsStateWithLifecycle()
+    val citizenDashboardState by complaintViewModel.citizenDashboardUiState.collectAsStateWithLifecycle()
     val notificationsState by notificationViewModel.notificationsUiState.collectAsStateWithLifecycle()
-    val unreadCount = notificationsState.unreadCount
+    val unreadCount = if (citizenDashboardState.unreadNotificationsCount > 0) {
+        citizenDashboardState.unreadNotificationsCount
+    } else {
+        notificationsState.unreadCount
+    }
 
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -98,7 +105,7 @@ fun CitizenHomeScreen(
 
     LaunchedEffect(currentUser?.id) {
         currentUser?.id?.let { citizenId ->
-            complaintViewModel.loadCitizenComplaints(citizenId)
+            complaintViewModel.loadCitizenDashboard(citizenId)
             notificationViewModel.loadNotifications(citizenId)
         }
     }
@@ -174,79 +181,124 @@ fun CitizenHomeScreen(
         },
         modifier = modifier
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-        ) {
-            // REAL-TIME STATUS OVERVIEW
-            val activeCount = complaintsState.allComplaints.count {
-                it.status == ComplaintStatus.SUBMITTED ||
-                it.status == ComplaintStatus.ASSIGNED ||
-                it.status == ComplaintStatus.PICKUP_IN_PROGRESS
-            }
-            val pendingCount = complaintsState.allComplaints.count {
-                it.status == ComplaintStatus.SUBMITTED
-            }
-            val emergencyCount = complaintsState.allComplaints.count {
-                it.isEmergency && it.status != ComplaintStatus.CLEANED && it.status != ComplaintStatus.VERIFIED
-            }
-            val completedCount = complaintsState.allComplaints.count {
-                it.status == ComplaintStatus.CLEANED || it.status == ComplaintStatus.VERIFIED
-            }
-
-            Text(
-                text = "Complaint Overview",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+        if (citizenDashboardState.isLoading && citizenDashboardState.recentComplaints.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.Center
             ) {
-                StatusSummaryMetricCard(
-                    count = activeCount,
-                    label = "Active Complaints",
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                    textColor = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                StatusSummaryMetricCard(
-                    count = pendingCount,
-                    label = "Pending Requests",
-                    containerColor = Color(0xFFFFF3E0),
-                    textColor = Color(0xFFE65100),
-                    modifier = Modifier.weight(1f)
-                )
+                CircularProgressIndicator()
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(MaterialTheme.colorScheme.background)
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                StatusSummaryMetricCard(
-                    count = emergencyCount,
-                    label = "Emergency Requests",
-                    containerColor = Color(0xFFFFEBEE),
-                    textColor = Color(0xFFC62828),
-                    modifier = Modifier.weight(1f)
-                )
-                StatusSummaryMetricCard(
-                    count = completedCount,
-                    label = "Completed",
-                    containerColor = Color(0xFFE8F5E9),
-                    textColor = Color(0xFF2E7D32),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                // ERROR BANNER IF AVAILABLE
+                citizenDashboardState.errorMessage?.let { error ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(onClick = { currentUser?.id?.let { complaintViewModel.loadCitizenDashboard(it) } }) {
+                                Text("Retry", color = MaterialTheme.colorScheme.onErrorContainer)
+                            }
+                        }
+                    }
+                }
+
+                // STATUS OVERVIEW HEADER WITH SYNTHETIC DEMO DATA BADGE
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Complaint Overview",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (citizenDashboardState.isSynthetic) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text(
+                                text = "Synthetic Demo Data",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StatusSummaryMetricCard(
+                        count = citizenDashboardState.activeComplaints,
+                        label = "Active Complaints",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        textColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatusSummaryMetricCard(
+                        count = citizenDashboardState.pendingRequests,
+                        label = "Pending Requests",
+                        containerColor = Color(0xFFFFF3E0),
+                        textColor = Color(0xFFE65100),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    StatusSummaryMetricCard(
+                        count = citizenDashboardState.emergencyRequests,
+                        label = "Emergency Requests",
+                        containerColor = Color(0xFFFFEBEE),
+                        textColor = Color(0xFFC62828),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatusSummaryMetricCard(
+                        count = citizenDashboardState.completedComplaints,
+                        label = "Completed",
+                        containerColor = Color(0xFFE8F5E9),
+                        textColor = Color(0xFF2E7D32),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -299,7 +351,7 @@ fun CitizenHomeScreen(
                     title = "My Complaints",
                     subtitle = "Track status & history",
                     icon = Icons.AutoMirrored.Filled.Assignment,
-                    badgeText = "${complaintsState.allComplaints.size} Total",
+                    badgeText = "${if (citizenDashboardState.totalComplaints > 0) citizenDashboardState.totalComplaints else complaintsState.allComplaints.size} Total",
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     iconTint = MaterialTheme.colorScheme.secondary,
                     onClick = onNavigateToMyComplaints,
@@ -388,6 +440,17 @@ fun CitizenHomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // RECENT COMPLAINTS SECTION
+            val recentList = if (citizenDashboardState.recentComplaints.isNotEmpty()) {
+                citizenDashboardState.recentComplaints
+            } else {
+                complaintsState.allComplaints.take(5)
+            }
+            val totalReportsCount = if (citizenDashboardState.totalComplaints > 0) {
+                citizenDashboardState.totalComplaints
+            } else {
+                complaintsState.allComplaints.size
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -399,9 +462,9 @@ fun CitizenHomeScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
 
-                if (complaintsState.allComplaints.isNotEmpty()) {
+                if (totalReportsCount > 0) {
                     Text(
-                        text = "View All (${complaintsState.allComplaints.size})",
+                        text = "View All ($totalReportsCount)",
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -413,7 +476,7 @@ fun CitizenHomeScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (complaintsState.allComplaints.isEmpty()) {
+            if (recentList.isEmpty()) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
@@ -447,9 +510,8 @@ fun CitizenHomeScreen(
                     }
                 }
             } else {
-                val recentComplaints = complaintsState.allComplaints.take(5)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    recentComplaints.forEach { complaint ->
+                    recentList.forEach { complaint ->
                         RecentComplaintCard(
                             complaint = complaint,
                             onClick = { onNavigateToComplaintDetail(complaint.id) }
@@ -462,6 +524,8 @@ fun CitizenHomeScreen(
         }
     }
 }
+}
+
 
 @Composable
 fun DashboardActionCard(

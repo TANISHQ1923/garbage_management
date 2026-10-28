@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Driver = require('../models/Driver');
 const Complaint = require('../models/Complaint');
 const Notification = require('../models/Notification');
+const { seedSyntheticData } = require('./seedSyntheticData');
 
 const seedData = async () => {
   console.log('[Seed] Starting database seeding process...');
@@ -582,6 +583,10 @@ const seedData = async () => {
     console.log('    - VERIFIED (SGM-2026-001050) - Organic / Critical');
     console.log('    - REJECTED (SGM-2026-000980) - Construction / Low');
     console.log('====================================================');
+
+    // 6. SYNTHETIC DEMO DATA SEEDING (120 Complaints, 21 Users, 8 Drivers)
+    console.log('\n[Seed] Proceeding to seed synthetic demo dataset...');
+    await seedSyntheticData(false);
 
     process.exit(0);
   } catch (error) {

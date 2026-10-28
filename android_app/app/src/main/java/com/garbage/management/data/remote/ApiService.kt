@@ -4,16 +4,20 @@ import com.garbage.management.data.model.AddOfficerNoteRequestDto
 import com.garbage.management.data.model.ApiResponseDto
 import com.garbage.management.data.model.AssignDriverRequestDto
 import com.garbage.management.data.model.AuthResponseDto
+import com.garbage.management.data.model.CitizenDashboardDto
 import com.garbage.management.data.model.ComplaintDto
 import com.garbage.management.data.model.CompleteCollectionRequestDto
 import com.garbage.management.data.model.CreateComplaintRequestDto
+import com.garbage.management.data.model.DriverDashboardDto
 import com.garbage.management.data.model.DriverDto
 import com.garbage.management.data.model.DriverLocationDto
 import com.garbage.management.data.model.LoginRequestDto
 import com.garbage.management.data.model.MediaUploadResponseDto
 import com.garbage.management.data.model.NotificationDto
+import com.garbage.management.data.model.OfficerDashboardDto
 import com.garbage.management.data.model.RegisterRequestDto
 import com.garbage.management.data.model.StartCollectionRequestDto
+import com.garbage.management.data.model.SubmitFeedbackRequestDto
 import com.garbage.management.data.model.UpdateEvidenceRequestDto
 import com.garbage.management.data.model.UpdateLocationRequestDto
 import com.garbage.management.data.model.UpdateStatusRequestDto
@@ -83,9 +87,18 @@ interface ApiService {
         @Path("id") id: String
     ): Response<ApiResponseDto<ComplaintDto>>
 
+    @POST("complaints/{id}/feedback")
+    suspend fun submitFeedback(
+        @Path("id") id: String,
+        @Body request: SubmitFeedbackRequestDto
+    ): Response<ApiResponseDto<ComplaintDto>>
+
     // =========================================================================
     // MUNICIPAL OFFICER
     // =========================================================================
+    @GET("officer/complaints/priority-queue")
+    suspend fun getPriorityQueue(): Response<ApiResponseDto<List<ComplaintDto>>>
+
     @GET("officer/complaints")
     suspend fun getAllOfficerComplaints(
         @Query("search") search: String? = null,
@@ -186,4 +199,16 @@ interface ApiService {
         @Part("folder") folder: RequestBody? = null,
         @Part("complaintId") complaintId: RequestBody? = null
     ): Response<ApiResponseDto<MediaUploadResponseDto>>
+
+    // =========================================================================
+    // DASHBOARDS
+    // =========================================================================
+    @GET("dashboard/citizen")
+    suspend fun getCitizenDashboard(): Response<ApiResponseDto<CitizenDashboardDto>>
+
+    @GET("dashboard/officer")
+    suspend fun getOfficerDashboard(): Response<ApiResponseDto<OfficerDashboardDto>>
+
+    @GET("dashboard/driver")
+    suspend fun getDriverDashboard(): Response<ApiResponseDto<DriverDashboardDto>>
 }

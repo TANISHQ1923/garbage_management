@@ -158,5 +158,8 @@ data class ApiResponseDto<T>(
     val count: Int? = null,
 
     @SerializedName("unreadCount")
-    val unreadCount: Int? = null
+    val unreadCount: Int? = null,
+
+    @SerializedName("dispatchResult")
+    val dispatchResult: DispatchResultDto? = null
 )

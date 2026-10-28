@@ -85,6 +85,7 @@ import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.domain.model.GarbageDriver
 import com.garbage.management.domain.usecase.StatusTransitionValidator
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
+import com.garbage.management.presentation.components.PriorityLevelBadge
 import com.garbage.management.presentation.components.UriImageViewer
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getComplaintStatusDescription
@@ -417,8 +418,16 @@ fun OfficerStatusActionBar(
                     OfficerStatusBadge(status = complaint.status)
                 }
 
-                if (complaint.isEmergency) {
-                    EmergencyPriorityBadge()
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    complaint.priorityLevel?.let { level ->
+                        PriorityLevelBadge(priorityLevel = level, priorityScore = complaint.priorityScore)
+                    }
+                    if (complaint.isEmergency) {
+                        EmergencyPriorityBadge()
+                    }
                 }
             }
 

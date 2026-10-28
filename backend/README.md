@@ -222,3 +222,63 @@ The backend connects to an independent Python FastAPI microservice located in `a
   6. If the AI service is offline, slow, or fails, the backend marks `aiAnalysisStatus = 'AI_UNAVAILABLE'` or `'FAILED'`, leaving the original complaint 100% functional.
   7. The AI result is strictly assistive (`modelStatus: 'DEVELOPMENT_BASELINE'`); it **never** alters official complaint status or auto-rejects complaints.
 
+---
+
+## 12. DEMO MODE & Synthetic Dataset
+
+The backend includes a high-fidelity synthetic demo mode designed for rapid prototyping, UI demonstration, and offline evaluation across the Citizen, Municipal Officer, and Garbage Driver dashboards.
+
+> [!NOTE]
+> **Synthetic Data Disclaimer**: All records in the synthetic dataset are simulated strictly for demonstration and testing purposes. They do **not** represent real municipal records, citizen personal data, or physical garbage collection operations.
+
+### Configuration (`USE_SYNTHETIC_DATA`)
+
+You can toggle synthetic demo mode via the `.env` file:
+
+```env
+# Enable Synthetic Demo Dataset for Dashboards & Read APIs
+USE_SYNTHETIC_DATA=true
+```
+
+- **`USE_SYNTHETIC_DATA=true`**: Dashboard read endpoints (`/api/dashboard/*`) and associated complaint/driver listings return structured, mathematically reconciled data from `backend/src/data/synthetic/synthetic-dashboard-data.json`. The backend functions seamlessly even without an active MongoDB connection.
+- **`USE_SYNTHETIC_DATA=false`** (Default): Preserves existing production behavior. All dashboard queries, aggregations, and reads hit MongoDB directly.
+
+> [!IMPORTANT]
+> **MongoDB Mode Remains 100% Intact**: All write operations (filing complaints, assigning drivers, status updates, officer notes, evidence upload, collection completion) continue to use the standard MongoDB workflows regardless of demo mode.
+
+### Dashboard Endpoints
+
+The following REST endpoints serve role-specific dashboard metrics and activity:
+
+| Method | Endpoint | Authorized Roles | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/dashboard/citizen` | `CITIZEN` | Returns personal complaint metrics, emergency counts, active/pending lists, and recent notifications for the authenticated citizen. |
+| `GET` | `/api/dashboard/officer` | `MUNICIPAL_OFFICER` | Returns city-wide complaint status breakdowns, emergency summaries, available driver fleet stats, AI analysis highlights, and recent municipal activity. |
+| `GET` | `/api/dashboard/driver` | `GARBAGE_DRIVER` | Returns assigned/in-progress/completed task counts, driver profile, current assigned tasks, and historical collections for the authenticated driver. |
+
+All endpoints enforce existing JWT authentication and strict Role-Based Access Control (RBAC).
+
+### Seeding Synthetic Data into MongoDB
+
+If you wish to populate your MongoDB Atlas or local database instance with the complete synthetic dataset (21 users, 8 drivers, 120 complaints, 37 notifications):
+
+```bash
+# Seed synthetic dataset into MongoDB
+npm run seed:synthetic
+
+# Or validate dataset integrity anytime
+npm run validate:synthetic
+```
+
+### Synthetic Demo Accounts
+
+The synthetic dataset provides pre-configured credentials for testing each role:
+
+| Role | Email | Password | Identifier / Details |
+| :--- | :--- | :--- | :--- |
+| **Citizen** | `aarav.sharma@example.com` | `password123` | ID: `65a000000000000000000001` (Green Park, Sector 4) |
+| **Citizen** | `priya.singh@example.com` | `password123` | ID: `65a000000000000000000002` (Civil Lines) |
+| **Municipal Officer** | `vikram.patel@example.com` | `password123` | ID: `65a000000000000000000011` (Emp: `MC-OFF-2026`, Ward 12) |
+| **Municipal Officer** | `anjali.mehta@example.com` | `password123` | ID: `65a000000000000000000012` (Emp: `MC-OFF-2027`, Ward 14) |
+| **Garbage Driver** | `ramesh.kumar@example.com` | `password123` | ID: `65a000000000000000000021` (Driver: `DRV-882`, Truck: `DL-01-GB-4040`) |
+| **Garbage Driver** | `suresh.yadav@example.com` | `password123` | ID: `65a000000000000000000022` (Driver: `DRV-883`, Truck: `DL-01-GB-4041`) |

@@ -17,7 +17,8 @@ class OfficerViewModelFactory(
                 getAvailableDriversUseCase = appContainer.getAvailableDriversUseCase,
                 assignDriverUseCase = appContainer.assignDriverUseCase,
                 updateComplaintStatusUseCase = appContainer.updateComplaintStatusUseCase,
-                addOfficerNoteUseCase = appContainer.addOfficerNoteUseCase
+                addOfficerNoteUseCase = appContainer.addOfficerNoteUseCase,
+                getOfficerDashboardUseCase = appContainer.getOfficerDashboardUseCase
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

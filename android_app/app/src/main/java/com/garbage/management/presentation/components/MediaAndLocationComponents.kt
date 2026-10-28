@@ -228,6 +228,43 @@ fun EmergencyPriorityBadge(
 }
 
 /**
+ * Priority queue badge displaying priority level (CRITICAL, HIGH, MEDIUM, LOW)
+ * and optional score (e.g., 95 pts).
+ */
+@Composable
+fun PriorityLevelBadge(
+    priorityLevel: String?,
+    priorityScore: Int?,
+    modifier: Modifier = Modifier
+) {
+    if (priorityLevel.isNullOrBlank()) return
+
+    val (bgColor, textColor) = when (priorityLevel.uppercase()) {
+        "CRITICAL" -> Pair(Color(0xFFFFEBEE), Color(0xFFC62828))
+        "HIGH" -> Pair(Color(0xFFFFF3E0), Color(0xFFE65100))
+        "MEDIUM" -> Pair(Color(0xFFFEF3C7), Color(0xFFB45309))
+        else -> Pair(Color(0xFFF1F5F9), Color(0xFF475569))
+    }
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bgColor,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (priorityScore != null) "${priorityLevel.uppercase()} ($priorityScore)" else priorityLevel.uppercase(),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = textColor
+            )
+        }
+    }
+}
+
+/**
  * Returns contextual municipal processing description for each complaint status.
  */
 fun getComplaintStatusDescription(status: ComplaintStatus): String {

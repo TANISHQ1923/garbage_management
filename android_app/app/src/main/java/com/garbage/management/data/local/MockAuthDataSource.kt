@@ -40,7 +40,7 @@ class MockAuthDataSource {
             email = DEMO_CITIZEN_EMAIL,
             phone = "+91 9876543210",
             role = UserRole.CITIZEN,
-            address = "Sector 4, Green Park, Smart City"
+            address = "Flat 402, Green Meadows, Bibwewadi Main Road, Pune"
         ),
         User(
             id = "mock-citizen-002",
@@ -48,7 +48,7 @@ class MockAuthDataSource {
             email = DEMO_CITIZEN2_EMAIL,
             phone = "+91 9876543220",
             role = UserRole.CITIZEN,
-            address = "Tower B, Lotus Apartments, Ward 12"
+            address = "Flat 101, Chintamani Nagar, Bibwewadi, Pune"
         ),
         User(
             id = "mock-citizen-003",
@@ -56,7 +56,7 @@ class MockAuthDataSource {
             email = DEMO_CITIZEN3_EMAIL,
             phone = "+91 9876543230",
             role = UserRole.CITIZEN,
-            address = "42 Heritage Colony, Central Zone"
+            address = "Upper Indira Nagar, Near KK Market, Bibwewadi, Pune"
         ),
         // Municipal Officers
         User(
@@ -66,7 +66,7 @@ class MockAuthDataSource {
             phone = "+91 9876543211",
             role = UserRole.MUNICIPAL_OFFICER,
             employeeId = "MC-OFF-2026",
-            ward = "Ward 12 - Central Zone"
+            ward = "Ward 19 - Bibwewadi & Sahakar Nagar, Pune"
         ),
         User(
             id = "mock-officer-002",
@@ -75,7 +75,7 @@ class MockAuthDataSource {
             phone = "+91 9876543221",
             role = UserRole.MUNICIPAL_OFFICER,
             employeeId = "MC-OFF-2027",
-            ward = "Ward 14 - North Zone"
+            ward = "Ward 20 - Dhankawadi & Katraj, Pune"
         ),
         // Garbage Drivers
         User(
@@ -85,7 +85,7 @@ class MockAuthDataSource {
             phone = "+91 9876543212",
             role = UserRole.GARBAGE_DRIVER,
             driverId = "DRV-882",
-            vehicleNumber = "DL-01-GB-4040"
+            vehicleNumber = "MH-12-GB-4040"
         ),
         User(
             id = "mock-driver-002",
@@ -94,7 +94,7 @@ class MockAuthDataSource {
             phone = "+91 9876543215",
             role = UserRole.GARBAGE_DRIVER,
             driverId = "DRV-104",
-            vehicleNumber = "DL-01-GB-5050"
+            vehicleNumber = "MH-12-GB-5050"
         ),
         User(
             id = "mock-driver-003",
@@ -103,7 +103,7 @@ class MockAuthDataSource {
             phone = "+91 9876543216",
             role = UserRole.GARBAGE_DRIVER,
             driverId = "DRV-305",
-            vehicleNumber = "DL-01-GB-6060"
+            vehicleNumber = "MH-12-GB-6060"
         ),
         User(
             id = "mock-driver-004",
@@ -112,7 +112,7 @@ class MockAuthDataSource {
             phone = "+91 9876543217",
             role = UserRole.GARBAGE_DRIVER,
             driverId = "DRV-412",
-            vehicleNumber = "DL-01-GB-7070"
+            vehicleNumber = "MH-12-GB-7070"
         ),
         User(
             id = "mock-driver-005",
@@ -121,7 +121,80 @@ class MockAuthDataSource {
             phone = "+91 9876543218",
             role = UserRole.GARBAGE_DRIVER,
             driverId = "DRV-520",
-            vehicleNumber = "DL-01-GB-8080"
+            vehicleNumber = "MH-12-GB-8080"
+        ),
+        // Synthetic Portal Drivers (name.surname@demo.local)
+        User(
+            id = "65f300000000000000000001",
+            name = "Ramesh Shinde",
+            email = "ramesh.shinde@demo.local",
+            phone = "+91 9876543221",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-001",
+            vehicleNumber = "MH-DEMO-001"
+        ),
+        User(
+            id = "65f300000000000000000002",
+            name = "Sunil Pawar",
+            email = "sunil.pawar@demo.local",
+            phone = "+91 9876543222",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-002",
+            vehicleNumber = "MH-DEMO-002"
+        ),
+        User(
+            id = "65f300000000000000000003",
+            name = "Amitabh Yadav",
+            email = "amitabh.yadav@demo.local",
+            phone = "+91 9876543223",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-003",
+            vehicleNumber = "MH-DEMO-003"
+        ),
+        User(
+            id = "65f300000000000000000004",
+            name = "Santosh Patil",
+            email = "santosh.patil@demo.local",
+            phone = "+91 9876543224",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-004",
+            vehicleNumber = "MH-DEMO-004"
+        ),
+        User(
+            id = "65f300000000000000000005",
+            name = "Ganesh Gaikwad",
+            email = "ganesh.gaikwad@demo.local",
+            phone = "+91 9876543225",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-005",
+            vehicleNumber = "MH-DEMO-005"
+        ),
+        User(
+            id = "65f300000000000000000006",
+            name = "Manoj Kale",
+            email = "manoj.kale@demo.local",
+            phone = "+91 9876543226",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-006",
+            vehicleNumber = "MH-DEMO-006"
+        ),
+        User(
+            id = "65f300000000000000000007",
+            name = "Dilip Bhosale",
+            email = "dilip.bhosale@demo.local",
+            phone = "+91 9876543227",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-007",
+            vehicleNumber = "MH-DEMO-007"
+        ),
+        User(
+            id = "65f300000000000000000008",
+            name = "Vijay Jagtap",
+            email = "vijay.jagtap@demo.local",
+            phone = "+91 9876543228",
+            role = UserRole.GARBAGE_DRIVER,
+            driverId = "DRV-DEMO-008",
+            vehicleNumber = "MH-DEMO-008"
         )
     )
 
@@ -135,7 +208,15 @@ class MockAuthDataSource {
         DEMO_DRIVER2_EMAIL to DEV_DEFAULT_PASSWORD,
         DEMO_DRIVER3_EMAIL to DEV_DEFAULT_PASSWORD,
         DEMO_DRIVER4_EMAIL to DEV_DEFAULT_PASSWORD,
-        DEMO_DRIVER5_EMAIL to DEV_DEFAULT_PASSWORD
+        DEMO_DRIVER5_EMAIL to DEV_DEFAULT_PASSWORD,
+        "ramesh.shinde@demo.local" to DEV_DEFAULT_PASSWORD,
+        "sunil.pawar@demo.local" to DEV_DEFAULT_PASSWORD,
+        "amitabh.yadav@demo.local" to DEV_DEFAULT_PASSWORD,
+        "santosh.patil@demo.local" to DEV_DEFAULT_PASSWORD,
+        "ganesh.gaikwad@demo.local" to DEV_DEFAULT_PASSWORD,
+        "manoj.kale@demo.local" to DEV_DEFAULT_PASSWORD,
+        "dilip.bhosale@demo.local" to DEV_DEFAULT_PASSWORD,
+        "vijay.jagtap@demo.local" to DEV_DEFAULT_PASSWORD
     )
 
     fun findUserByEmail(email: String): User? {
@@ -149,7 +230,7 @@ class MockAuthDataSource {
             return null
         }
         val user = findUserByEmail(cleanEmail) ?: return null
-        return if (user.role == role) user else null
+        return if (user.role == role) user.copy(token = "mock-token-${user.id}") else null
     }
 
     fun registerUser(user: User, password: String): User {

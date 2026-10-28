@@ -15,6 +15,7 @@ interface ComplaintRepository {
     fun getCitizenComplaints(citizenId: String): Flow<List<GarbageComplaint>>
     suspend fun getComplaintById(complaintId: String): Resource<GarbageComplaint>
     fun getAllComplaints(): Flow<List<GarbageComplaint>>
+    suspend fun getPriorityQueue(): Resource<List<GarbageComplaint>>
     suspend fun assignDriver(
         complaintId: String,
         driver: GarbageDriver,
@@ -51,6 +52,13 @@ interface ComplaintRepository {
         driverName: String,
         afterCleaningUri: String,
         beforeCleaningUri: String? = null
+    ): Resource<GarbageComplaint>
+    suspend fun submitFeedback(
+        complaintId: String,
+        rating: Int,
+        comment: String? = null,
+        citizenId: String? = null,
+        citizenName: String? = null
     ): Resource<GarbageComplaint>
 }
 

@@ -16,16 +16,22 @@ import com.garbage.management.data.remote.RemoteDriverDataSource
 import com.garbage.management.data.remote.RemoteMediaDataSource
 import com.garbage.management.data.remote.RemoteNotificationDataSource
 import com.garbage.management.data.remote.RemoteOfficerDataSource
+import com.garbage.management.data.remote.RemoteDashboardDataSource
 import com.garbage.management.data.repository.AuthRepositoryImpl
 import com.garbage.management.data.repository.ComplaintRepositoryImpl
 import com.garbage.management.data.repository.DriverLocationRepositoryImpl
 import com.garbage.management.data.repository.MediaRepositoryImpl
 import com.garbage.management.data.repository.NotificationRepositoryImpl
+import com.garbage.management.data.repository.DashboardRepositoryImpl
 import com.garbage.management.domain.repository.AuthRepository
 import com.garbage.management.domain.repository.ComplaintRepository
 import com.garbage.management.domain.repository.DriverLocationRepository
 import com.garbage.management.domain.repository.MediaRepository
 import com.garbage.management.domain.repository.NotificationRepository
+import com.garbage.management.domain.repository.DashboardRepository
+import com.garbage.management.domain.usecase.GetCitizenDashboardUseCase
+import com.garbage.management.domain.usecase.GetOfficerDashboardUseCase
+import com.garbage.management.domain.usecase.GetDriverDashboardUseCase
 import com.garbage.management.domain.usecase.AddOfficerNoteUseCase
 import com.garbage.management.domain.usecase.AssignDriverUseCase
 import com.garbage.management.domain.usecase.CompleteCollectionUseCase
@@ -38,6 +44,7 @@ import com.garbage.management.domain.usecase.GetDriverCollectionHistoryUseCase
 import com.garbage.management.domain.usecase.GetDriverComplaintsUseCase
 import com.garbage.management.domain.usecase.GetDriverLocationUseCase
 import com.garbage.management.domain.usecase.GetNotificationsUseCase
+import com.garbage.management.domain.usecase.GetPriorityQueueUseCase
 import com.garbage.management.domain.usecase.GetUnreadNotificationCountUseCase
 import com.garbage.management.domain.usecase.LoginUseCase
 import com.garbage.management.domain.usecase.LogoutUseCase
@@ -46,6 +53,7 @@ import com.garbage.management.domain.usecase.MarkNotificationReadUseCase
 import com.garbage.management.domain.usecase.RegisterUseCase
 import com.garbage.management.domain.usecase.StartCollectionUseCase
 import com.garbage.management.domain.usecase.SubmitComplaintUseCase
+import com.garbage.management.domain.usecase.SubmitFeedbackUseCase
 import com.garbage.management.domain.usecase.UpdateComplaintStatusUseCase
 import com.garbage.management.domain.usecase.UpdateDriverLocationUseCase
 import com.garbage.management.utils.SystemNotificationHelper
@@ -106,9 +114,13 @@ class AppContainer(private val context: Context) {
         RemoteMediaDataSource(apiService = apiService)
     }
 
+    val remoteDashboardDataSource: RemoteDashboardDataSource by lazy {
+        RemoteDashboardDataSource(apiService = apiService)
+    }
+
     // Local data sources retained for offline rendering & caching
     val localComplaintDataSource: LocalComplaintDataSource by lazy {
-        LocalComplaintDataSource()
+        LocalComplaintDataSource(context)
     }
 
     val localNotificationDataSource: LocalNotificationDataSource by lazy {
@@ -162,6 +174,14 @@ class AppContainer(private val context: Context) {
         MediaRepositoryImpl(remoteMediaDataSource = remoteMediaDataSource)
     }
 
+    val dashboardRepository: DashboardRepository by lazy {
+        DashboardRepositoryImpl(
+            remoteDataSource = remoteDashboardDataSource,
+            localDataSource = localComplaintDataSource,
+            sessionManager = sessionManager
+        )
+    }
+
     // =========================================================================
     // AUTHENTICATION USE CASES
     // =========================================================================
@@ -192,6 +212,10 @@ class AppContainer(private val context: Context) {
         GetComplaintByIdUseCase(repository = complaintRepository)
     }
 
+    val submitFeedbackUseCase: SubmitFeedbackUseCase by lazy {
+        SubmitFeedbackUseCase(repository = complaintRepository)
+    }
+
     // =========================================================================
     // NOTIFICATION USE CASES
     // =========================================================================
@@ -220,6 +244,10 @@ class AppContainer(private val context: Context) {
     // =========================================================================
     val getAllComplaintsUseCase: GetAllComplaintsUseCase by lazy {
         GetAllComplaintsUseCase(repository = complaintRepository)
+    }
+
+    val getPriorityQueueUseCase: GetPriorityQueueUseCase by lazy {
+        GetPriorityQueueUseCase(repository = complaintRepository)
     }
 
     val getAvailableDriversUseCase: GetAvailableDriversUseCase by lazy {
@@ -277,5 +305,20 @@ class AppContainer(private val context: Context) {
 
     val getDriverLocationUseCase: GetDriverLocationUseCase by lazy {
         GetDriverLocationUseCase(repository = driverLocationRepository)
+    }
+
+    // =========================================================================
+    // DASHBOARD USE CASES
+    // =========================================================================
+    val getCitizenDashboardUseCase: GetCitizenDashboardUseCase by lazy {
+        GetCitizenDashboardUseCase(repository = dashboardRepository)
+    }
+
+    val getOfficerDashboardUseCase: GetOfficerDashboardUseCase by lazy {
+        GetOfficerDashboardUseCase(repository = dashboardRepository)
+    }
+
+    val getDriverDashboardUseCase: GetDriverDashboardUseCase by lazy {
+        GetDriverDashboardUseCase(repository = dashboardRepository)
     }
 }

@@ -107,7 +107,60 @@ fun ComplaintSubmittedScreen(
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // DISPATCH STATUS CARD
+        if (complaint != null) {
+            val isAssigned = complaint.status == com.garbage.management.domain.model.ComplaintStatus.ASSIGNED || complaint.assignedDriverName != null
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isAssigned) Color(0xFFE8F5E9) else Color(0xFFFFF8E1)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isAssigned) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (isAssigned) Color(0xFF2E7D32) else Color(0xFFF57F17),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isAssigned) "Driver Assigned Automatically" else "Awaiting Driver Assignment",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (isAssigned) Color(0xFF1B5E20) else Color(0xFFE65100)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        if (isAssigned) {
+                            val driverName = complaint.assignedDriverName ?: "Nearby Driver"
+                            val vehicle = complaint.assignedVehicleNumber ?: "Collection Vehicle"
+                            val dist = complaint.dispatchResult?.distanceKm
+                            val distanceText = if (dist != null) " (${String.format(java.util.Locale.US, "%.1f", dist)} km away)" else ""
+                            Text(
+                                text = "Dispatched to $driverName ($vehicle)$distanceText",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF2E7D32)
+                            )
+                        } else {
+                            Text(
+                                text = "Queued in priority queue. Dispatches as soon as a driver is nearby.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF8D6E63)
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // REFERENCE CARD
         Card(
@@ -238,6 +291,28 @@ fun ComplaintSubmittedScreen(
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                 textAlign = TextAlign.End,
                                 maxLines = 2
+                            )
+                        }
+                    }
+
+                    if (complaint.assignedDriverName != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Assigned Driver",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${complaint.assignedDriverName} (${complaint.assignedVehicleNumber ?: "Pending"})",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             )
                         }
                     }

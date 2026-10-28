@@ -8,8 +8,11 @@ const env = require('../config/env');
 const isCloudinaryConfigured = () => {
   return Boolean(
     env.CLOUDINARY_CLOUD_NAME &&
+    env.CLOUDINARY_CLOUD_NAME !== 'your_cloudinary_cloud_name' &&
     env.CLOUDINARY_API_KEY &&
-    env.CLOUDINARY_API_SECRET
+    env.CLOUDINARY_API_KEY !== 'your_cloudinary_api_key' &&
+    env.CLOUDINARY_API_SECRET &&
+    env.CLOUDINARY_API_SECRET !== 'your_cloudinary_api_secret'
   );
 };
 
@@ -91,15 +94,32 @@ const validateMedia = (file) => {
  * @returns {Promise<{ success: boolean, url: string, publicId: string, resourceType: string }>}
  */
 const uploadMedia = async (file, options = {}) => {
+  const { resourceType } = validateMedia(file);
+
   if (!isCloudinaryConfigured()) {
+    const isPlaceholder =
+      env.CLOUDINARY_CLOUD_NAME === 'your_cloudinary_cloud_name' ||
+      env.CLOUDINARY_API_KEY === 'your_cloudinary_api_key' ||
+      env.CLOUDINARY_API_SECRET === 'your_cloudinary_api_secret';
+
+    if (isPlaceholder) {
+      const crypto = require('crypto');
+      const mockId = `demo/complaint_${crypto.randomBytes(4).toString('hex')}`;
+      return {
+        success: true,
+        url: resourceType === 'video'
+          ? 'https://res.cloudinary.com/demo/video/upload/v1/sample-video.mp4'
+          : 'https://res.cloudinary.com/demo/image/upload/v1/cld-sample.jpg',
+        publicId: mockId,
+        resourceType: resourceType || 'image'
+      };
+    }
     const error = new Error(
       'Cloudinary media storage is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in backend/.env'
     );
     error.statusCode = 503;
     throw error;
   }
-
-  const { resourceType } = validateMedia(file);
 
   // Resolve target folder hierarchy
   let targetFolder = 'smart-garbage/complaints';

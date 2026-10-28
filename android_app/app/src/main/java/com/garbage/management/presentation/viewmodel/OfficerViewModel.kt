@@ -23,9 +23,49 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class OfficerSortOption(val displayName: String) {
+    PRIORITY_QUEUE("Priority Queue"),
     EMERGENCY_FIRST("Emergency First"),
     NEWEST_FIRST("Newest First"),
     OLDEST_FIRST("Oldest First")
+}
+
+object PriorityCalculator {
+    fun calculateScore(complaint: GarbageComplaint, now: Long = System.currentTimeMillis()): Int {
+        var score = 0
+        if (complaint.isEmergency) {
+            score += 50
+        }
+        val ageMs = (now - complaint.createdAt).coerceAtLeast(0)
+        val hours = ageMs / (1000 * 60 * 60)
+        when {
+            hours >= 24 -> score += 25
+            hours >= 12 -> score += 15
+            hours >= 6 -> score += 8
+            else -> score += 0
+        }
+        when (complaint.status) {
+            ComplaintStatus.SUBMITTED -> score += 20
+            ComplaintStatus.ASSIGNED -> score += 10
+            ComplaintStatus.PICKUP_IN_PROGRESS -> score += 5
+            else -> {}
+        }
+        return score.coerceIn(0, 100)
+    }
+
+    fun getPriorityLevel(score: Int): String {
+        return when {
+            score >= 70 -> "CRITICAL"
+            score >= 50 -> "HIGH"
+            score >= 25 -> "MEDIUM"
+            else -> "LOW"
+        }
+    }
+
+    fun isEligibleForActiveQueue(status: ComplaintStatus): Boolean {
+        return status == ComplaintStatus.SUBMITTED ||
+               status == ComplaintStatus.ASSIGNED ||
+               status == ComplaintStatus.PICKUP_IN_PROGRESS
+    }
 }
 
 data class OfficerMetrics(
@@ -45,6 +85,9 @@ data class OfficerDashboardUiState(
     val priorityComplaints: List<GarbageComplaint> = emptyList(),
     val pendingAssignments: List<GarbageComplaint> = emptyList(),
     val recentComplaints: List<GarbageComplaint> = emptyList(),
+    val availableDriversCount: Int = 0,
+    val totalDriversCount: Int = 0,
+    val isSynthetic: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -53,7 +96,7 @@ data class OfficerComplaintsUiState(
     val complaints: List<GarbageComplaint> = emptyList(),
     val searchQuery: String = "",
     val selectedFilter: String = "All",
-    val selectedSort: OfficerSortOption = OfficerSortOption.EMERGENCY_FIRST,
+    val selectedSort: OfficerSortOption = OfficerSortOption.PRIORITY_QUEUE,
     val totalCount: Int = 0
 )
 
@@ -74,7 +117,8 @@ class OfficerViewModel(
     private val getAvailableDriversUseCase: GetAvailableDriversUseCase,
     private val assignDriverUseCase: AssignDriverUseCase,
     private val updateComplaintStatusUseCase: UpdateComplaintStatusUseCase,
-    private val addOfficerNoteUseCase: AddOfficerNoteUseCase
+    private val addOfficerNoteUseCase: AddOfficerNoteUseCase,
+    private val getOfficerDashboardUseCase: com.garbage.management.domain.usecase.GetOfficerDashboardUseCase? = null
 ) : ViewModel() {
 
     private val _dashboardState = MutableStateFlow(OfficerDashboardUiState(isLoading = true))
@@ -82,7 +126,7 @@ class OfficerViewModel(
 
     private val _searchQuery = MutableStateFlow("")
     private val _selectedFilter = MutableStateFlow("All")
-    private val _selectedSort = MutableStateFlow(OfficerSortOption.EMERGENCY_FIRST)
+    private val _selectedSort = MutableStateFlow(OfficerSortOption.PRIORITY_QUEUE)
 
     private val _detailState = MutableStateFlow(OfficerComplaintDetailUiState())
     val detailState: StateFlow<OfficerComplaintDetailUiState> = _detailState.asStateFlow()
@@ -93,7 +137,17 @@ class OfficerViewModel(
         _selectedFilter,
         _selectedSort
     ) { allComplaints, query, filter, sort ->
-        val filtered = allComplaints.filter { complaint ->
+        val enriched = allComplaints.map { complaint ->
+            val score = complaint.priorityScore ?: PriorityCalculator.calculateScore(complaint)
+            val level = complaint.priorityLevel ?: PriorityCalculator.getPriorityLevel(score)
+            if (complaint.priorityScore == null || complaint.priorityLevel == null) {
+                complaint.copy(priorityScore = score, priorityLevel = level)
+            } else {
+                complaint
+            }
+        }
+
+        val filtered = enriched.filter { complaint ->
             // Search criteria: complaint ID, citizen name, garbage type, location description
             val matchesQuery = if (query.isBlank()) true else {
                 complaint.id.contains(query, ignoreCase = true) ||
@@ -102,9 +156,10 @@ class OfficerViewModel(
                         complaint.locationDescription.contains(query, ignoreCase = true)
             }
 
-            // Filter criteria: All, Submitted, Assigned, Pickup In Progress, Cleaned, Verified, Rejected, Emergency
+            // Filter criteria: All, Priority Queue, Submitted, Assigned, Pickup In Progress, Cleaned, Verified, Rejected, Emergency
             val matchesFilter = when (filter) {
                 "All" -> true
+                "Priority Queue" -> PriorityCalculator.isEligibleForActiveQueue(complaint.status)
                 "Submitted" -> complaint.status == ComplaintStatus.SUBMITTED
                 "Assigned" -> complaint.status == ComplaintStatus.ASSIGNED
                 "In Progress", "Pickup In Progress" -> complaint.status == ComplaintStatus.PICKUP_IN_PROGRESS
@@ -118,8 +173,15 @@ class OfficerViewModel(
             matchesQuery && matchesFilter
         }
 
-        // Sorting rule: Local rule-based order
+        // Sorting rule: Rule-based priority or chronological order
         val sorted = when (sort) {
+            OfficerSortOption.PRIORITY_QUEUE -> {
+                filtered.sortedWith(
+                    compareByDescending<GarbageComplaint> { it.priorityScore ?: 0 }
+                        .thenBy { it.createdAt }
+                        .thenBy { it.id }
+                )
+            }
             OfficerSortOption.EMERGENCY_FIRST -> {
                 filtered.sortedWith(
                     compareByDescending<GarbageComplaint> { it.isEmergency }
@@ -148,13 +210,72 @@ class OfficerViewModel(
     )
 
     init {
+        loadOfficerDashboard()
         observeAllComplaints()
         loadAvailableDrivers()
     }
 
     fun refreshAllComplaints() {
+        loadOfficerDashboard()
         observeAllComplaints()
         loadAvailableDrivers()
+    }
+
+    fun loadOfficerDashboard() {
+        if (getOfficerDashboardUseCase == null) return
+
+        val hasData = _dashboardState.value.allComplaints.isNotEmpty()
+        _dashboardState.update { it.copy(isLoading = !hasData, error = null) }
+
+        viewModelScope.launch {
+            getOfficerDashboardUseCase().collect { result ->
+                when (result) {
+                    is Resource.Success -> {
+                        val data = result.data
+                        if (data != null) {
+                            val metrics = OfficerMetrics(
+                                total = data.totalComplaints,
+                                submitted = data.submitted,
+                                assigned = data.assigned,
+                                inProgress = data.inProgress,
+                                cleaned = data.cleaned,
+                                verified = data.verified,
+                                rejected = data.rejected,
+                                emergency = data.emergency
+                            )
+                            _dashboardState.update {
+                                it.copy(
+                                    allComplaints = data.allComplaints,
+                                    metrics = metrics,
+                                    priorityComplaints = data.priorityComplaints,
+                                    pendingAssignments = data.pendingAssignments,
+                                    recentComplaints = data.recentComplaints,
+                                    availableDriversCount = data.availableDriversCount,
+                                    totalDriversCount = data.totalDriversCount,
+                                    isSynthetic = data.isSynthetic,
+                                    isLoading = false,
+                                    error = null
+                                )
+                            }
+                            if (data.drivers.isNotEmpty()) {
+                                _detailState.update { it.copy(availableDrivers = data.drivers) }
+                            }
+                        }
+                    }
+                    is Resource.Error -> {
+                        _dashboardState.update {
+                            it.copy(
+                                isLoading = false,
+                                error = result.message ?: "Unable to load dashboard data. Please check the server connection."
+                            )
+                        }
+                    }
+                    is Resource.Loading -> {
+                        _dashboardState.update { it.copy(isLoading = !hasData) }
+                    }
+                }
+            }
+        }
     }
 
     private fun observeAllComplaints() {
@@ -171,23 +292,32 @@ class OfficerViewModel(
                     emergency = complaints.count { it.isEmergency }
                 )
 
-                // Rule-based priority requests:
-                // 1. Emergency complaints that are not yet cleaned/verified
-                // 2. Oldest complaints waiting for assignment or in progress
-                val priority = complaints
-                    .filter { it.status != ComplaintStatus.CLEANED && it.status != ComplaintStatus.VERIFIED && it.status != ComplaintStatus.REJECTED }
+                val enrichedComplaints = complaints.map { complaint ->
+                    val score = complaint.priorityScore ?: PriorityCalculator.calculateScore(complaint)
+                    val level = complaint.priorityLevel ?: PriorityCalculator.getPriorityLevel(score)
+                    if (complaint.priorityScore == null || complaint.priorityLevel == null) {
+                        complaint.copy(priorityScore = score, priorityLevel = level)
+                    } else {
+                        complaint
+                    }
+                }
+
+                // Rule-based priority requests using active dispatch queue criteria:
+                val priority = enrichedComplaints
+                    .filter { PriorityCalculator.isEligibleForActiveQueue(it.status) }
                     .sortedWith(
-                        compareByDescending<GarbageComplaint> { it.isEmergency }
+                        compareByDescending<GarbageComplaint> { it.priorityScore ?: 0 }
                             .thenBy { it.createdAt }
+                            .thenBy { it.id }
                     )
 
-                val pending = complaints.filter { it.status == ComplaintStatus.SUBMITTED }
+                val pending = enrichedComplaints.filter { it.status == ComplaintStatus.SUBMITTED }
                     .sortedBy { it.createdAt }
 
-                val recent = complaints.sortedByDescending { it.createdAt }.take(5)
+                val recent = enrichedComplaints.sortedByDescending { it.createdAt }.take(5)
 
                 _dashboardState.value = OfficerDashboardUiState(
-                    allComplaints = complaints,
+                    allComplaints = enrichedComplaints,
                     metrics = metrics,
                     priorityComplaints = priority,
                     pendingAssignments = pending,

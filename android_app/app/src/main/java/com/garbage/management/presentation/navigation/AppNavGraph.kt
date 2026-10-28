@@ -228,6 +228,7 @@ fun AppNavGraph(
             ComplaintDetailsScreen(
                 complaintId = complaintId,
                 viewModel = complaintViewModel,
+                authViewModel = authViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

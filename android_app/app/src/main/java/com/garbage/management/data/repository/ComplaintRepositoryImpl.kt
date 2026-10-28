@@ -6,6 +6,7 @@ import com.garbage.management.data.remote.ApiClient
 import com.garbage.management.data.remote.RemoteComplaintDataSource
 import com.garbage.management.data.remote.RemoteDriverDataSource
 import com.garbage.management.data.remote.RemoteOfficerDataSource
+import com.garbage.management.domain.model.CleanupFeedback
 import com.garbage.management.domain.model.ComplaintStatus
 import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.domain.model.GarbageDriver
@@ -63,10 +64,10 @@ class ComplaintRepositoryImpl(
 
             val remoteResult = remoteComplaintDataSource.submitComplaint(request)
             if (remoteResult is Resource.Success && remoteResult.data != null) {
-                localDataSource?.addComplaint(remoteResult.data)
+                localDataSource?.addOrUpdateComplaint(remoteResult.data)
                 remoteResult
             } else if (localDataSource != null) {
-                localDataSource.addComplaint(complaint)
+                localDataSource.addOrUpdateComplaint(complaint)
                 Resource.Success(complaint)
             } else {
                 remoteResult
@@ -87,10 +88,13 @@ class ComplaintRepositoryImpl(
             when (val remote = remoteComplaintDataSource.getMyComplaints()) {
                 is Resource.Success -> {
                     val list = remote.data ?: emptyList()
+                    list.forEach { localDataSource?.addOrUpdateComplaint(it) }
                     emit(list)
                 }
                 is Resource.Error -> {
-                    if (cached.isEmpty()) {
+                    if (cached.isNotEmpty()) {
+                        emit(cached)
+                    } else {
                         emit(emptyList())
                     }
                 }
@@ -147,6 +151,29 @@ class ComplaintRepositoryImpl(
                 is Resource.Loading -> Unit
             }
         }.flowOn(Dispatchers.IO)
+    }
+
+    override suspend fun getPriorityQueue(): Resource<List<GarbageComplaint>> = withContext(Dispatchers.IO) {
+        if (isLocalOnly && localDataSource != null) {
+            val localQueue = localDataSource.getPriorityQueue()
+            return@withContext Resource.Success(localQueue)
+        }
+
+        when (val remote = remoteOfficerDataSource.getPriorityQueue()) {
+            is Resource.Success -> {
+                val list = remote.data ?: emptyList()
+                Resource.Success(list)
+            }
+            is Resource.Error -> {
+                if (localDataSource != null) {
+                    val fallback = localDataSource.getPriorityQueue()
+                    Resource.Success(fallback)
+                } else {
+                    remote
+                }
+            }
+            is Resource.Loading -> Resource.Loading()
+        }
     }
 
     override suspend fun assignDriver(
@@ -379,6 +406,43 @@ class ComplaintRepositoryImpl(
                 afterCleaningUri = afterCleaningUri,
                 beforeCleaningUri = beforeCleaningUri
             )
+            if (updated != null) Resource.Success(updated) else remoteResult
+        } else {
+            remoteResult
+        }
+    }
+
+    override suspend fun submitFeedback(
+        complaintId: String,
+        rating: Int,
+        comment: String?,
+        citizenId: String?,
+        citizenName: String?
+    ): Resource<GarbageComplaint> = withContext(Dispatchers.IO) {
+        val fallbackFeedback = CleanupFeedback(
+            rating = rating,
+            comment = comment ?: "",
+            submittedAt = System.currentTimeMillis(),
+            citizenId = citizenId ?: "",
+            citizenName = citizenName ?: ""
+        )
+
+        if (isLocalOnly && localDataSource != null) {
+            val updated = localDataSource.submitFeedback(complaintId, fallbackFeedback)
+            return@withContext if (updated != null) {
+                Resource.Success(updated)
+            } else {
+                Resource.Error("Complaint with ID '$complaintId' not found.")
+            }
+        }
+
+        val remoteResult = remoteComplaintDataSource.submitFeedback(complaintId, rating, comment)
+        if (remoteResult is Resource.Success && remoteResult.data != null) {
+            val feedbackToSave = remoteResult.data.feedback ?: fallbackFeedback
+            localDataSource?.submitFeedback(complaintId, feedbackToSave)
+            remoteResult
+        } else if (localDataSource != null) {
+            val updated = localDataSource.submitFeedback(complaintId, fallbackFeedback)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {
             remoteResult

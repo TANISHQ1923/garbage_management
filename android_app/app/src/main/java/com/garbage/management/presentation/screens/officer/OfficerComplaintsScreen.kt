@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
+import com.garbage.management.presentation.components.PriorityLevelBadge
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.OfficerSortOption
@@ -78,6 +79,7 @@ fun OfficerComplaintsScreen(
 
     val filterOptions = listOf(
         "All",
+        "Priority Queue",
         "Submitted",
         "Assigned",
         "In Progress",
@@ -313,6 +315,12 @@ fun OfficerDetailedComplaintCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    complaint.priorityLevel?.let { level ->
+                        PriorityLevelBadge(
+                            priorityLevel = level,
+                            priorityScore = complaint.priorityScore
+                        )
+                    }
                     if (complaint.isEmergency) {
                         EmergencyPriorityBadge()
                     }

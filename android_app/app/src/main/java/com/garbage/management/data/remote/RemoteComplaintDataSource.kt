@@ -21,7 +21,7 @@ class RemoteComplaintDataSource(private val apiService: ApiService) {
                 Resource.Error(errorMsg)
             }
         } catch (e: Exception) {
-            Resource.Error(e.localizedMessage ?: "Failed to submit complaint to backend.")
+            Resource.Error(resolveErrorMessage(e, "Failed to submit complaint to backend."))
         }
     }
 
@@ -36,7 +36,7 @@ class RemoteComplaintDataSource(private val apiService: ApiService) {
                 Resource.Error(errorMsg)
             }
         } catch (e: Exception) {
-            Resource.Error(e.localizedMessage ?: "Failed to fetch complaints.")
+            Resource.Error(resolveErrorMessage(e, "Failed to fetch complaints."))
         }
     }
 
@@ -50,7 +50,7 @@ class RemoteComplaintDataSource(private val apiService: ApiService) {
                 Resource.Error(errorMsg)
             }
         } catch (e: Exception) {
-            Resource.Error(e.localizedMessage ?: "Failed to load complaint details.")
+            Resource.Error(resolveErrorMessage(e, "Failed to load complaint details."))
         }
     }
 
@@ -64,7 +64,25 @@ class RemoteComplaintDataSource(private val apiService: ApiService) {
                 Resource.Error(errorMsg)
             }
         } catch (e: Exception) {
-            Resource.Error(e.localizedMessage ?: "Failed to request emergency escalation.")
+            Resource.Error(resolveErrorMessage(e, "Failed to request emergency escalation."))
+        }
+    }
+
+    suspend fun submitFeedback(id: String, rating: Int, comment: String?): Resource<GarbageComplaint> {
+        return try {
+            val request = com.garbage.management.data.model.SubmitFeedbackRequestDto(
+                rating = rating,
+                comment = comment
+            )
+            val response = apiService.submitFeedback(id, request)
+            if (response.isSuccessful && response.body()?.data != null) {
+                Resource.Success(response.body()!!.data!!.toDomain())
+            } else {
+                val errorMsg = parseErrorMessage(response.errorBody()?.string(), response.message())
+                Resource.Error(errorMsg)
+            }
+        } catch (e: Exception) {
+            Resource.Error(resolveErrorMessage(e, "Failed to submit feedback to backend."))
         }
     }
 
@@ -75,6 +93,17 @@ class RemoteComplaintDataSource(private val apiService: ApiService) {
             json.optString("message", fallback)
         } catch (e: Exception) {
             fallback
+        }
+    }
+
+    private fun resolveErrorMessage(e: Exception, fallback: String): String {
+        val msg = e.localizedMessage ?: return fallback
+        return when {
+            msg.contains("Failed to connect", ignoreCase = true) || msg.contains("Connection refused", ignoreCase = true) ->
+                "Unable to connect to the backend server. Please verify the server is running on port 5000."
+            msg.contains("timeout", ignoreCase = true) ->
+                "Connection to server timed out. Please check your network connection."
+            else -> msg.ifBlank { fallback }
         }
     }
 }

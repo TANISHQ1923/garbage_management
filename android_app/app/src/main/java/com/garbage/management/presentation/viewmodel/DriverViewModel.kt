@@ -62,6 +62,11 @@ data class DriverUiState(
     val inProgressCount: Int = 0,
     val completedTodayCount: Int = 0,
     val emergencyCount: Int = 0,
+    // Driver info
+    val driverName: String = "",
+    val vehicleNumber: String = "",
+    val vehicleType: String = "",
+    val isSynthetic: Boolean = false,
     // Working photo state for the active task
     val draftBeforeImageUri: String? = null,
     val draftAfterImageUri: String? = null,
@@ -81,7 +86,8 @@ class DriverViewModel(
     private val getDriverLocationUseCase: GetDriverLocationUseCase,
     private val getComplaintByIdUseCase: GetComplaintByIdUseCase,
     private val localDriverDataSource: com.garbage.management.data.local.LocalDriverDataSource,
-    private val mediaRepository: com.garbage.management.domain.repository.MediaRepository? = null
+    private val mediaRepository: com.garbage.management.domain.repository.MediaRepository? = null,
+    private val getDriverDashboardUseCase: com.garbage.management.domain.usecase.GetDriverDashboardUseCase? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DriverUiState())
@@ -102,6 +108,7 @@ class DriverViewModel(
             _uiState.update { it.copy(driverAvailability = driver.availability) }
         }
 
+        loadDriverDashboard(driverId)
         observeDriverTasks(driverId)
         observeDriverLocation(driverId)
         observeDriverHistory(driverId, _uiState.value.selectedHistoryFilter)
@@ -109,8 +116,63 @@ class DriverViewModel(
 
     fun refreshTasks() {
         currentDriverId?.let { id ->
+            loadDriverDashboard(id)
             observeDriverTasks(id)
             observeDriverHistory(id, _uiState.value.selectedHistoryFilter)
+        }
+    }
+
+    fun loadDriverDashboard(driverId: String) {
+        if (getDriverDashboardUseCase == null) return
+
+        val hasTasks = _uiState.value.allTasks.isNotEmpty()
+        _uiState.update { it.copy(isLoading = !hasTasks, errorMessage = null) }
+
+        viewModelScope.launch {
+            getDriverDashboardUseCase().collect { result ->
+                when (result) {
+                    is Resource.Success -> {
+                        val data = result.data
+                        if (data != null) {
+                            val combinedTasks = mutableListOf<GarbageComplaint>()
+                            data.activeTask?.let { combinedTasks.add(it) }
+                            combinedTasks.addAll(data.assignedTasks.filter { it.id != data.activeTask?.id })
+
+                            _uiState.update { state ->
+                                val filtered = applyFilterAndSort(combinedTasks, state.selectedFilter, state.selectedSort)
+                                state.copy(
+                                    isLoading = false,
+                                    allTasks = combinedTasks,
+                                    filteredTasks = filtered,
+                                    activeTask = data.activeTask,
+                                    driverAvailability = data.availability,
+                                    driverName = data.driverName,
+                                    vehicleNumber = data.vehicleNumber,
+                                    vehicleType = data.vehicleType,
+                                    assignedCount = data.assignedTasksCount,
+                                    inProgressCount = data.inProgressTasksCount,
+                                    completedTodayCount = data.completedTasksCount,
+                                    emergencyCount = data.emergencyTasksCount,
+                                    historyComplaints = if (data.collectionHistory.isNotEmpty()) data.collectionHistory else state.historyComplaints,
+                                    isSynthetic = data.isSynthetic,
+                                    errorMessage = null
+                                )
+                            }
+                        }
+                    }
+                    is Resource.Error -> {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = result.message ?: "Unable to load dashboard data. Please check the server connection."
+                            )
+                        }
+                    }
+                    is Resource.Loading -> {
+                        _uiState.update { it.copy(isLoading = !hasTasks) }
+                    }
+                }
+            }
         }
     }
 
@@ -519,7 +581,8 @@ class DriverViewModelFactory(
                 getDriverLocationUseCase = appContainer.getDriverLocationUseCase,
                 getComplaintByIdUseCase = appContainer.getComplaintByIdUseCase,
                 localDriverDataSource = appContainer.localDriverDataSource,
-                mediaRepository = appContainer.mediaRepository
+                mediaRepository = appContainer.mediaRepository,
+                getDriverDashboardUseCase = appContainer.getDriverDashboardUseCase
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

@@ -20,7 +20,9 @@ const env = {
   MAX_VIDEO_SIZE_MB: parseInt(process.env.MAX_VIDEO_SIZE_MB || '50', 10),
   // Python FastAPI AI Analysis Service
   AI_SERVICE_URL: process.env.AI_SERVICE_URL || 'http://localhost:8000',
-  AI_SERVICE_TIMEOUT_MS: parseInt(process.env.AI_SERVICE_TIMEOUT_MS || '5000', 10)
+  AI_SERVICE_TIMEOUT_MS: parseInt(process.env.AI_SERVICE_TIMEOUT_MS || '5000', 10),
+  // Synthetic Demo Dataset Mode (Serves dashboards from synthetic dataset when true)
+  USE_SYNTHETIC_DATA: process.env.USE_SYNTHETIC_DATA === 'true'
 };
 
 module.exports = env;

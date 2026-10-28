@@ -1,5 +1,6 @@
 const express = require('express');
 const {
+  getPriorityQueue,
   getAllComplaints,
   getComplaintById,
   getDrivers,
@@ -16,6 +17,7 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireRole('MUNICIPAL_OFFICER'));
 
+router.get('/complaints/priority-queue', getPriorityQueue);
 router.get('/complaints', getAllComplaints);
 router.get('/complaints/:id', getComplaintById);
 router.get('/drivers', getDrivers);

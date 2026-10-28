@@ -73,7 +73,7 @@ class RemoteMediaDataSource(private val apiService: ApiService) {
                 Resource.Error(errorMsg)
             }
         } catch (e: Exception) {
-            Resource.Error(e.localizedMessage ?: "Failed to upload media.")
+            Resource.Error(resolveErrorMessage(e, "Failed to upload media."))
         }
     }
 
@@ -84,6 +84,17 @@ class RemoteMediaDataSource(private val apiService: ApiService) {
             json.optString("message", fallbackMessage)
         } catch (_: Exception) {
             fallbackMessage.ifBlank { "An unexpected error occurred." }
+        }
+    }
+
+    private fun resolveErrorMessage(e: Exception, fallback: String): String {
+        val msg = e.localizedMessage ?: return fallback
+        return when {
+            msg.contains("Failed to connect", ignoreCase = true) || msg.contains("Connection refused", ignoreCase = true) ->
+                "Unable to connect to the backend server. Please verify the server is running on port 5000."
+            msg.contains("timeout", ignoreCase = true) ->
+                "Connection to server timed out. Please check your network connection."
+            else -> msg.ifBlank { fallback }
         }
     }
 }

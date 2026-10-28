@@ -50,6 +50,9 @@ data class ComplaintDto(
     @SerializedName("emergency")
     val emergency: Boolean? = false,
 
+    @SerializedName("isEmergency")
+    val isEmergency: Boolean? = null,
+
     @SerializedName("status")
     val status: String? = null,
 
@@ -82,6 +85,18 @@ data class ComplaintDto(
 
     @SerializedName("aiAnalysisStatus")
     val aiAnalysisStatus: String? = null,
+
+    @SerializedName("feedback")
+    val feedback: CleanupFeedbackDto? = null,
+
+    @SerializedName("priorityScore")
+    val priorityScore: Int? = null,
+
+    @SerializedName("priorityLevel")
+    val priorityLevel: String? = null,
+
+    @SerializedName("dispatchResult")
+    val dispatchResult: DispatchResultDto? = null,
 
     @SerializedName("createdAt")
     val createdAt: Any? = null,
@@ -129,7 +144,7 @@ data class ComplaintDto(
             latitude = latitude,
             longitude = longitude,
             locationDescription = locationText ?: "Location not specified",
-            isEmergency = emergency ?: false,
+            isEmergency = (emergency == true) || (isEmergency == true),
             status = mappedStatus,
             statusHistory = mappedHistory,
             assignedDriverId = assignedDriverId,
@@ -141,6 +156,10 @@ data class ComplaintDto(
             afterCleaningImageUri = afterCleaningImageUrl,
             aiAnalysis = aiAnalysis?.toDomain(),
             aiAnalysisStatus = aiAnalysisStatus,
+            feedback = feedback?.toDomain(),
+            priorityScore = priorityScore,
+            priorityLevel = priorityLevel,
+            dispatchResult = dispatchResult?.toDomain(),
             createdAt = parsedCreatedAt,
             updatedAt = parsedUpdatedAt
         )
@@ -337,3 +356,73 @@ data class UpdateEvidenceRequestDto(
     @SerializedName("afterCleaningImageUrl")
     val afterCleaningImageUrl: String? = null
 )
+
+data class SubmitFeedbackRequestDto(
+    @SerializedName("rating")
+    val rating: Int,
+
+    @SerializedName("comment")
+    val comment: String? = null
+)
+
+data class CleanupFeedbackDto(
+    @SerializedName("rating")
+    val rating: Int? = null,
+
+    @SerializedName("comment")
+    val comment: String? = null,
+
+    @SerializedName("submittedAt")
+    val submittedAt: Long? = null,
+
+    @SerializedName("citizenId")
+    val citizenId: String? = null,
+
+    @SerializedName("citizenName")
+    val citizenName: String? = null
+) {
+    fun toDomain(): com.garbage.management.domain.model.CleanupFeedback? {
+        val r = rating ?: return null
+        return com.garbage.management.domain.model.CleanupFeedback(
+            rating = r,
+            comment = comment ?: "",
+            submittedAt = submittedAt ?: System.currentTimeMillis(),
+            citizenId = citizenId ?: "",
+            citizenName = citizenName ?: ""
+        )
+    }
+}
+
+data class DispatchResultDto(
+    @SerializedName("assigned")
+    val assigned: Boolean? = null,
+
+    @SerializedName("assignmentStatus")
+    val assignmentStatus: String? = null,
+
+    @SerializedName("assignedDriverId")
+    val assignedDriverId: String? = null,
+
+    @SerializedName("assignedDriverName")
+    val assignedDriverName: String? = null,
+
+    @SerializedName("assignedVehicleNumber")
+    val assignedVehicleNumber: String? = null,
+
+    @SerializedName("distanceKm")
+    val distanceKm: Double? = null,
+
+    @SerializedName("message")
+    val message: String? = null
+) {
+    fun toDomain(): com.garbage.management.domain.model.DispatchResult {
+        return com.garbage.management.domain.model.DispatchResult(
+            assignmentStatus = assignmentStatus ?: if (assigned == true) "ASSIGNED" else "PENDING_DRIVER",
+            assignedDriverId = assignedDriverId,
+            assignedDriverName = assignedDriverName,
+            assignedVehicleNumber = assignedVehicleNumber,
+            distanceKm = distanceKm,
+            message = message
+        )
+    }
+}

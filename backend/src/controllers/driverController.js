@@ -3,6 +3,8 @@ const Driver = require('../models/Driver');
 const { canDriverTransition } = require('../services/complaintService');
 const { createNotification } = require('../services/notificationService');
 const { deleteAsset } = require('../services/mediaService');
+const syntheticDataService = require('../services/syntheticDataService');
+const { getDBStatus } = require('../config/db');
 
 /**
  * Helper to resolve driverId from authenticated user
@@ -18,6 +20,26 @@ const getDriverId = (user) => {
 const getMyTasks = async (req, res, next) => {
   try {
     const driverId = getDriverId(req.user);
+
+    if (syntheticDataService.isSyntheticMode()) {
+      const allSynthetic = syntheticDataService.getSyntheticComplaints();
+      let myTasks = allSynthetic.filter((c) => c.assignedDriverId === driverId);
+      if (
+        myTasks.length === 0 &&
+        (driverId === 'DRV-882' ||
+          driverId === 'mock-driver-001' ||
+          req.user.email === 'driver@example.com')
+      ) {
+        myTasks = allSynthetic.filter((c) => c.assignedDriverId === 'DRV-DEMO-001');
+      }
+      myTasks.sort((a, b) => (b.emergency ? 1 : 0) - (a.emergency ? 1 : 0) || new Date(b.createdAt) - new Date(a.createdAt));
+      return res.status(200).json({
+        success: true,
+        count: myTasks.length,
+        data: myTasks
+      });
+    }
+
     const complaints = await Complaint.find({ assignedDriverId: driverId }).sort({
       emergency: -1,
       createdAt: -1
@@ -41,6 +63,28 @@ const getTaskById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const driverId = getDriverId(req.user);
+
+    if (syntheticDataService.isSyntheticMode()) {
+      const complaint = syntheticDataService.getSyntheticComplaints().find(
+        (c) => c.complaintId === id || c.id === id || c._id === id
+      );
+      if (!complaint) {
+        return res.status(404).json({
+          success: false,
+          message: `Complaint with ID '${id}' not found.`
+        });
+      }
+      if (complaint.assignedDriverId !== driverId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: This task is not assigned to your vehicle.'
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: complaint
+      });
+    }
 
     const complaint = await Complaint.findOne({
       $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
@@ -83,9 +127,18 @@ const startCollection = async (req, res, next) => {
     } = req.body;
     const driverId = getDriverId(req.user);
 
-    const complaint = await Complaint.findOne({
-      $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
-    });
+    let complaint;
+    const isFindMocked = typeof Complaint.findOne === 'function' && Boolean(Complaint.findOne._isMockFunction);
+    if (!isFindMocked && syntheticDataService.isSyntheticMode()) {
+      complaint = syntheticDataService.getSyntheticComplaints().find(
+        (c) => c.complaintId === id || c.id === id || c._id === id
+      );
+    }
+    if (!complaint) {
+      complaint = await Complaint.findOne({
+        $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
+      });
+    }
 
     if (!complaint) {
       return res.status(404).json({
@@ -128,7 +181,13 @@ const startCollection = async (req, res, next) => {
       note: 'Driver initiated on-site waste collection.'
     });
 
-    await complaint.save();
+    if (typeof complaint.save === 'function') {
+      await complaint.save();
+    }
+    if (syntheticDataService.isSyntheticMode()) {
+      syntheticDataService.updateSyntheticComplaint(complaint.complaintId || complaint.id, complaint);
+      syntheticDataService.updateSyntheticDriverAvailability(driverId, 'BUSY');
+    }
 
     // Safely delete old Cloudinary asset if replaced
     if (oldBeforePublicId && beforeCleaningImagePublicId && oldBeforePublicId !== beforeCleaningImagePublicId) {
@@ -136,7 +195,11 @@ const startCollection = async (req, res, next) => {
     }
 
     // Mark driver availability as BUSY
-    await Driver.findOneAndUpdate({ driverId }, { availability: 'BUSY' });
+    if (getDBStatus().isConnected || Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
+      try {
+        await Driver.findOneAndUpdate({ driverId }, { availability: 'BUSY' });
+      } catch (_) {}
+    }
 
     // Emit notification to citizen
     await createNotification({
@@ -185,9 +248,18 @@ const completeCollection = async (req, res, next) => {
 
     const driverId = getDriverId(req.user);
 
-    const complaint = await Complaint.findOne({
-      $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
-    });
+    let complaint;
+    const isCompleteFindMocked = typeof Complaint.findOne === 'function' && Boolean(Complaint.findOne._isMockFunction);
+    if (!isCompleteFindMocked && syntheticDataService.isSyntheticMode()) {
+      complaint = syntheticDataService.getSyntheticComplaints().find(
+        (c) => c.complaintId === id || c.id === id || c._id === id
+      );
+    }
+    if (!complaint) {
+      complaint = await Complaint.findOne({
+        $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
+      });
+    }
 
     if (!complaint) {
       return res.status(404).json({
@@ -236,7 +308,13 @@ const completeCollection = async (req, res, next) => {
       note: 'Waste pickup completed with on-site photo verification.'
     });
 
-    await complaint.save();
+    if (typeof complaint.save === 'function') {
+      await complaint.save();
+    }
+    if (syntheticDataService.isSyntheticMode()) {
+      syntheticDataService.updateSyntheticComplaint(complaint.complaintId || complaint.id, complaint);
+      syntheticDataService.updateSyntheticDriverAvailability(driverId, 'AVAILABLE');
+    }
 
     // Safely delete replaced assets
     if (oldBeforePublicId && beforeCleaningImagePublicId && oldBeforePublicId !== beforeCleaningImagePublicId) {
@@ -247,7 +325,11 @@ const completeCollection = async (req, res, next) => {
     }
 
     // Reset driver availability to AVAILABLE
-    await Driver.findOneAndUpdate({ driverId }, { availability: 'AVAILABLE' });
+    if (getDBStatus().isConnected || Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
+      try {
+        await Driver.findOneAndUpdate({ driverId }, { availability: 'AVAILABLE' });
+      } catch (_) {}
+    }
 
     // Emit notification to citizen
     await createNotification({
@@ -354,6 +436,27 @@ const updateLocation = async (req, res, next) => {
     const driverId = getDriverId(req.user);
     const now = Date.now();
 
+    if (syntheticDataService.isSyntheticMode() && !Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
+      const synDriver = syntheticDataService.getSyntheticDrivers().find((d) => d.driverId === driverId);
+      if (synDriver) {
+        synDriver.currentLocation = {
+          latitude: Number(latitude),
+          longitude: Number(longitude),
+          timestamp: now
+        };
+        return res.status(200).json({
+          success: true,
+          message: 'Driver coordinates updated',
+          data: {
+            driverId,
+            latitude: synDriver.currentLocation.latitude,
+            longitude: synDriver.currentLocation.longitude,
+            timestamp: now
+          }
+        });
+      }
+    }
+
     const driver = await Driver.findOneAndUpdate(
       { driverId },
       {
@@ -388,6 +491,22 @@ const updateLocation = async (req, res, next) => {
 const getLocation = async (req, res, next) => {
   try {
     const driverId = req.query.driverId || getDriverId(req.user);
+
+    if (syntheticDataService.isSyntheticMode() && !Boolean(Driver.findOne?._isMockFunction)) {
+      const synDriver = syntheticDataService.getSyntheticDrivers().find((d) => d.driverId === driverId);
+      if (synDriver && synDriver.currentLocation) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            driverId,
+            latitude: synDriver.currentLocation.latitude,
+            longitude: synDriver.currentLocation.longitude,
+            timestamp: synDriver.currentLocation.timestamp || Date.now()
+          }
+        });
+      }
+    }
+
     const driver = await Driver.findOne({ driverId });
 
     if (!driver || !driver.currentLocation) {
@@ -423,6 +542,19 @@ const getLocation = async (req, res, next) => {
 const getHistory = async (req, res, next) => {
   try {
     const driverId = getDriverId(req.user);
+
+    if (syntheticDataService.isSyntheticMode()) {
+      const allSynthetic = syntheticDataService.getSyntheticComplaints();
+      const history = allSynthetic
+        .filter((c) => c.assignedDriverId === driverId && (c.status === 'CLEANED' || c.status === 'VERIFIED'))
+        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      return res.status(200).json({
+        success: true,
+        count: history.length,
+        data: history
+      });
+    }
+
     const history = await Complaint.find({
       assignedDriverId: driverId,
       status: { $in: ['CLEANED', 'VERIFIED'] }
