@@ -40,13 +40,7 @@ const getCitizenDashboard = async (req, res, next) => {
     // 2. Standard Database Mode (MongoDB)
     const dbStatus = getDBStatus();
     if (!dbStatus.isConnected) {
-      // Graceful fallback to demo data if DB is disconnected in development
-      const fallbackPayload = syntheticDataService.getCitizenDashboardData(citizenId);
-      return res.status(200).json({
-        success: true,
-        message: 'Citizen dashboard data fetched (Database offline fallback)',
-        data: fallbackPayload
-      });
+      return res.status(503).json({ success: false, message: 'Database unavailable. Please retry later.' });
     }
 
     const complaints = await Complaint.find({ citizenId }).sort({ createdAt: -1 });
@@ -116,12 +110,7 @@ const getOfficerDashboard = async (req, res, next) => {
     // 2. Standard Database Mode (MongoDB)
     const dbStatus = getDBStatus();
     if (!dbStatus.isConnected) {
-      const fallbackPayload = syntheticDataService.getOfficerDashboardData();
-      return res.status(200).json({
-        success: true,
-        message: 'Officer dashboard data fetched (Database offline fallback)',
-        data: fallbackPayload
-      });
+      return res.status(503).json({ success: false, message: 'Database unavailable. Please retry later.' });
     }
 
     const complaints = await Complaint.find().sort({ createdAt: -1 });
@@ -214,12 +203,7 @@ const getDriverDashboard = async (req, res, next) => {
     // 2. Standard Database Mode (MongoDB)
     const dbStatus = getDBStatus();
     if (!dbStatus.isConnected) {
-      const fallbackPayload = syntheticDataService.getDriverDashboardData(driverId);
-      return res.status(200).json({
-        success: true,
-        message: 'Driver dashboard data fetched (Database offline fallback)',
-        data: fallbackPayload
-      });
+      return res.status(503).json({ success: false, message: 'Database unavailable. Please retry later.' });
     }
 
     const tasks = await Complaint.find({ assignedDriverId: driverId }).sort({ emergency: -1, createdAt: -1 });

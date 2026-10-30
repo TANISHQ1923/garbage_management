@@ -1,3 +1,4 @@
+jest.mock('../src/config/db', () => ({ getDBStatus: jest.fn(() => ({ isConnected: true, state: 'connected' })) }));
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../src/app');
@@ -74,6 +75,12 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
       { expiresIn: '1h' }
     );
   });
+
+  beforeEach(() => {
+    jest.spyOn(User, 'findById').mockImplementation(async id =>
+      [mockCitizen, mockOfficer, mockDriver1, mockDriver2].find(u => u.id === String(id)) || null);
+  });
+  afterEach(() => jest.restoreAllMocks());
 
   // =========================================================================
   // 1. AUTHENTICATION & TOKEN VALIDATION

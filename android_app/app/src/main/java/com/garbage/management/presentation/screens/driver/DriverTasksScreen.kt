@@ -108,6 +108,7 @@ fun DriverTasksScreen(
                     }
                 },
                 actions = {
+                    androidx.compose.material3.TextButton(onClick = { driverViewModel.refreshTasks() }) { Text("Refresh") }
                     Box {
                         OutlinedButton(
                             onClick = { sortMenuExpanded = true },
@@ -334,7 +335,7 @@ fun DriverTaskCard(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = complaint.locationDescription,
+                    text = if (complaint.source == "SENSOR") "Bin ${complaint.binId}: ${complaint.locationDescription}" else complaint.locationDescription,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

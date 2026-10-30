@@ -58,6 +58,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +107,8 @@ fun DriverHomeScreen(
     val effectiveVehicleNumber = if (uiState.vehicleNumber.isNotBlank()) uiState.vehicleNumber else vehicleNumber
     val effectiveDriverName = if (uiState.driverName.isNotBlank()) uiState.driverName else (currentUser?.name ?: "Driver")
 
+    var isCapturingLocation by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
     // Location permission launcher
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -114,12 +117,15 @@ fun DriverHomeScreen(
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (isGranted) {
             coroutineScope.launch {
-                val loc = LocationHelper.getCurrentLocation(context)
-                if (loc != null) {
-                    driverViewModel.updateLocation(driverId, loc.latitude, loc.longitude)
-                } else {
-                    Toast.makeText(context, "Unable to get GPS location. Please check device location settings.", Toast.LENGTH_SHORT).show()
-                }
+                isCapturingLocation = true
+                try {
+                    val loc = LocationHelper.getCurrentLocation(context)
+                    if (loc != null) {
+                        driverViewModel.updateLocation(driverId, loc.latitude, loc.longitude, loc.time)
+                    } else {
+                        Toast.makeText(context, "No fresh device location within 15 seconds. Try near a window or outdoors, then retry.", Toast.LENGTH_LONG).show()
+                    }
+                } finally { isCapturingLocation = false }
             }
         } else {
             Toast.makeText(context, "Location permission denied. Cannot capture device coordinates.", Toast.LENGTH_SHORT).show()
@@ -544,11 +550,11 @@ fun DriverHomeScreen(
                                 )
                             )
                         },
-                        enabled = !uiState.isUpdatingLocation,
+                        enabled = !uiState.isUpdatingLocation && !isCapturingLocation,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        if (uiState.isUpdatingLocation) {
+                        if (uiState.isUpdatingLocation || isCapturingLocation) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,

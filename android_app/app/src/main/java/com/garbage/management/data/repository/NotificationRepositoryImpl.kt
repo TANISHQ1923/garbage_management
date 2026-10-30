@@ -46,11 +46,7 @@ class NotificationRepositoryImpl(
                     list.forEach { localDataSource.addNotification(it) }
                     emit(list)
                 }
-                is Resource.Error -> {
-                    if (cached.isEmpty()) {
-                        emit(emptyList())
-                    }
-                }
+                is Resource.Error -> throw IllegalStateException(remote.message ?: "Unable to load notifications.")
                 is Resource.Loading -> Unit
             }
         }.flowOn(Dispatchers.IO)

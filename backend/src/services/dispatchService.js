@@ -40,6 +40,7 @@ const isValidCoordinate = (lat, lon) => {
   if (lat === null || lat === undefined || lon === null || lon === undefined) {
     return false;
   }
+  if (typeof lat !== 'number' || typeof lon !== 'number') return false;
   const nLat = Number(lat);
   const nLon = Number(lon);
   if (!Number.isFinite(nLat) || !Number.isFinite(nLon)) {
@@ -48,285 +49,137 @@ const isValidCoordinate = (lat, lon) => {
   return nLat >= -90 && nLat <= 90 && nLon >= -180 && nLon <= 180;
 };
 
-/**
- * In-memory mutex promise chain to serialize concurrent dispatch in synthetic demo mode.
- */
-let dispatchLock = Promise.resolve();
+const env = require('../config/env');
+const { withTransaction } = require('./transactionService');
+const ACTIVE_STATUSES = ['ASSIGNED', 'PICKUP_IN_PROGRESS'];
+const conflict = (message) => Object.assign(new Error(message), { statusCode: 409 });
 
-const withDispatchLock = (fn) => {
-  const result = dispatchLock.then(fn, fn);
-  dispatchLock = result.catch(() => {});
-  return result;
+const hasFreshLocation = (driver, now = Date.now()) => {
+  const loc = driver.currentLocation;
+  return !!loc && loc.source === 'DEVICE' && isValidCoordinate(loc.latitude, loc.longitude)
+    && Number.isFinite(loc.timestamp) && loc.timestamp <= now
+    && now - loc.timestamp <= env.DRIVER_LOCATION_MAX_AGE_MS;
 };
 
-/**
- * Ranks available drivers by distance to complaint coordinates, with stable driver ID tie-breaking.
- *
- * @param {{latitude: number, longitude: number}} complaintCoords
- * @param {Array<Object>} availableDrivers
- * @returns {Array<{driver: Object, distanceKm: number}>}
- */
-const rankCandidateDrivers = (complaintCoords, availableDrivers) => {
-  const { latitude: cLat, longitude: cLon } = complaintCoords;
-  if (!isValidCoordinate(cLat, cLon)) {
-    return [];
+const rankCandidateDrivers = (coords, drivers, now = Date.now()) => {
+  if (!isValidCoordinate(coords.latitude, coords.longitude)) return [];
+  return drivers.filter(d => d.availability === 'AVAILABLE' && hasFreshLocation(d, now))
+    .map(driver => ({ driver, distanceKm: calculateHaversineDistanceKm(coords.latitude, coords.longitude,
+      driver.currentLocation.latitude, driver.currentLocation.longitude) }))
+    .filter(c => c.distanceKm <= env.DRIVER_SERVICE_RADIUS_KM)
+    .sort((a, b) => a.distanceKm - b.distanceKm || a.driver.driverId.localeCompare(b.driver.driverId));
+};
+
+const resultFor = (complaint, distanceKm = null, idempotent = false) => ({
+  assigned: true, assignmentStatus: 'ASSIGNED', assignedDriverId: complaint.assignedDriverId,
+  assignedDriverName: complaint.assignedDriverName, assignedVehicleNumber: complaint.assignedVehicleNumber,
+  distanceKm, idempotent, assignedAt: complaint.assignedAt, message: 'Pickup assigned successfully.'
+});
+
+const notifyAssignment = async (complaint) => {
+  const driverUser = syntheticDataService.isSyntheticMode()
+    ? syntheticDataService.getSyntheticUserById(complaint.assignedDriverId)
+    : await User.findOne({ driverId: complaint.assignedDriverId, role: 'GARBAGE_DRIVER' });
+  if (complaint.citizenId) await createNotification({ userId: complaint.citizenId, type: 'PICKUP_ASSIGNED',
+    title: 'Garbage Pickup Assigned', message: `Complaint ${complaint.complaintId} assigned to ${complaint.assignedDriverName}.`,
+    complaintId: complaint.complaintId });
+  await createNotification({ userId: driverUser?.id || driverUser?._id || complaint.assignedDriverId,
+    type: 'DRIVER_ASSIGNMENT', title: 'New Collection Assignment',
+    message: `Complaint ${complaint.complaintId} assigned to your vehicle.`, complaintId: complaint.complaintId });
+};
+
+// Manual and automatic callers share all eligibility, capacity, and idempotency rules.
+const reserveAssignment = async (complaintId, driverId, actor = {}, now = Date.now()) => {
+  if (syntheticDataService.isSyntheticMode()) {
+    const c = syntheticDataService.getSyntheticComplaints().find(c => c.complaintId === complaintId);
+    const d = syntheticDataService.getSyntheticDrivers().find(d => d.driverId === driverId);
+    if (!c || !d) throw conflict('Complaint or driver not found.');
+    if (ACTIVE_STATUSES.includes(c.status) && c.assignedDriverId === driverId) return resultFor(c, null, true);
+    if (c.status !== 'SUBMITTED') throw conflict('Only submitted complaints may be assigned.');
+    if (!rankCandidateDrivers(c, [d], now).length || syntheticDataService.getSyntheticComplaints()
+      .some(t => t.assignedDriverId === driverId && ACTIVE_STATUSES.includes(t.status))) throw conflict('Driver unavailable or location stale/outside service radius.');
+    applyAssignment(c, d, actor, now);
+    syntheticDataService.updateSyntheticComplaint(complaintId, c);
+    syntheticDataService.updateSyntheticDriverAvailability(driverId, 'BUSY');
+    await notifyAssignment(c);
+    return resultFor(c);
   }
-
-  const candidates = [];
-  for (const driver of availableDrivers) {
-    if (driver.availability !== 'AVAILABLE') {
-      continue;
+  const outcome = await withTransaction(async session => {
+    const c = await Complaint.findOne({ complaintId }).session(session);
+    if (!c) throw Object.assign(new Error('Complaint not found.'), { statusCode: 404 });
+    if (ACTIVE_STATUSES.includes(c.status) && c.assignedDriverId === driverId) return { c, idempotent: true };
+    if (c.status !== 'SUBMITTED') throw conflict('Only submitted complaints may be assigned.');
+    const d = await Driver.findOne({ driverId }).session(session);
+    if (!d || !rankCandidateDrivers(c, [d], now).length) throw conflict('Driver unavailable or location stale/outside service radius.');
+    if (await Complaint.exists({ assignedDriverId: driverId, status: { $in: ACTIVE_STATUSES } }).session(session)) {
+      throw conflict('Driver already has an active pickup.');
     }
-    const dLoc = driver.currentLocation;
-    if (!dLoc || !isValidCoordinate(dLoc.latitude, dLoc.longitude)) {
-      continue;
-    }
-
-    const distanceKm = calculateHaversineDistanceKm(
-      Number(cLat),
-      Number(cLon),
-      Number(dLoc.latitude),
-      Number(dLoc.longitude)
-    );
-
-    candidates.push({
-      driver,
-      distanceKm
-    });
-  }
-
-  candidates.sort((a, b) => {
-    const diff = a.distanceKm - b.distanceKm;
-    if (Math.abs(diff) > 1e-6) {
-      return diff;
-    }
-    return String(a.driver.driverId || '').localeCompare(String(b.driver.driverId || ''));
+    // Both concurrent assignments write this driver document; MongoDB retries write conflicts.
+    const claimed = await Driver.findOneAndUpdate({ driverId, availability: 'AVAILABLE' },
+      { $set: { availability: 'BUSY' } }, { new: true, session });
+    if (!claimed) throw conflict('Driver was reserved by another pickup.');
+    applyAssignment(c, claimed, actor, now);
+    await c.save({ session });
+    return { c, idempotent: false };
   });
-
-  return candidates;
+  // Notifications are after commit. Delivery failure must not turn a committed assignment into an HTTP failure.
+  if (!outcome.idempotent) {
+    try { await notifyAssignment(outcome.c); } catch (_) { console.warn('[Dispatch] Assignment committed; notification delivery failed.'); }
+  }
+  return resultFor(outcome.c, null, outcome.idempotent);
 };
 
-/**
- * Attempts automatic driver assignment for a complaint based on proximity and availability.
- * Supports both MongoDB mode and Synthetic Demo mode.
- *
- * @param {Object} complaint The newly created complaint
- * @param {Object} options Optional settings { now }
- * @returns {Promise<Object>} Dispatch result object
- */
+function applyAssignment(c, d, actor, now) {
+  if (c.source === 'SENSOR') c.dispatchRetry = { ...(c.dispatchRetry?.toObject?.() || c.dispatchRetry || {}),
+    state: 'ASSIGNED', reason: null, nextAttemptAt: null, leaseUntil: 0 };
+  c.status = 'ASSIGNED'; c.assignedDriverId = d.driverId; c.assignedDriverName = d.name;
+  c.assignedVehicleNumber = d.vehicleNumber; c.assignedAt = now;
+  if (!c.statusHistory) c.statusHistory = [];
+  c.statusHistory.push({ status: 'ASSIGNED', timestamp: now, changedBy: actor.name || 'System Auto-Dispatch',
+    role: actor.role || 'SYSTEM', note: `Assigned to ${d.name}.` });
+}
+
+const pending = reason => ({ assigned: false, assignmentStatus: 'PENDING_DRIVER', reason,
+  assignedDriverId: null, message: 'Complaint saved; awaiting eligible driver assignment.' });
 const autoDispatchComplaint = async (complaint, options = {}) => {
   const now = options.now || Date.now();
-  const cLat = complaint.latitude;
-  const cLon = complaint.longitude;
-
-  // 1. If complaint coordinates are missing or invalid:
-  if (!isValidCoordinate(cLat, cLon)) {
-    return {
-      assigned: false,
-      assignmentStatus: 'PENDING_DRIVER',
-      assignedDriverId: null,
-      assignedDriverName: null,
-      assignedVehicleNumber: null,
-      distanceKm: null,
-      reason: 'MISSING_COMPLAINT_COORDINATES',
-      message: 'Complaint registered. Awaiting driver assignment because valid GPS coordinates were not provided.'
-    };
-  }
-
-  // 2. Synthetic Demo Mode execution
-  if (syntheticDataService.isSyntheticMode()) {
-    return withDispatchLock(async () => {
-      const allDrivers = syntheticDataService.getSyntheticDrivers();
-
-      // Filter eligible drivers: availability AVAILABLE and valid coordinates
-      const eligibleDrivers = allDrivers.filter(
-        (d) => d.availability === 'AVAILABLE'
-      );
-
-      const ranked = rankCandidateDrivers({ latitude: cLat, longitude: cLon }, eligibleDrivers);
-
-      if (ranked.length === 0) {
-        return {
-          assigned: false,
-          assignmentStatus: 'PENDING_DRIVER',
-          assignedDriverId: null,
-          assignedDriverName: null,
-          assignedVehicleNumber: null,
-          distanceKm: null,
-          reason: 'NO_AVAILABLE_DRIVER',
-          message: 'Complaint registered. No nearby drivers are currently available for automatic dispatch.'
-        };
-      }
-
-      const selected = ranked[0];
-      const driver = selected.driver;
-      const distKm = Math.round(selected.distanceKm * 100) / 100;
-
-      // Atomically update driver availability in synthetic data
-      syntheticDataService.updateSyntheticDriverAvailability(driver.driverId, 'BUSY');
-
-      // Update complaint in memory
-      complaint.status = 'ASSIGNED';
-      complaint.assignedDriverId = driver.driverId;
-      complaint.assignedDriverName = driver.name;
-      complaint.assignedVehicleNumber = driver.vehicleNumber || 'Vehicle Assigned';
-      complaint.assignedAt = now;
-      if (!complaint.statusHistory) complaint.statusHistory = [];
-      complaint.statusHistory.push({
-        status: 'ASSIGNED',
-        timestamp: now,
-        changedBy: 'System Auto-Dispatch',
-        role: 'SYSTEM',
-        note: `Automatically assigned to closest available driver ${driver.name} (${driver.vehicleNumber || 'Vehicle Assigned'}) [${distKm} km].`
-      });
-
-      // Send in-app notifications
-      // 1. Citizen notification
-      await createNotification({
-        userId: complaint.citizenId,
-        type: 'PICKUP_ASSIGNED',
-        title: 'Garbage Pickup Assigned',
-        message: `Your complaint ${complaint.complaintId} has been automatically assigned to driver ${driver.name} (${driver.vehicleNumber || 'Collection Vehicle'}).`,
-        complaintId: complaint.complaintId
-      });
-
-      // 2. Driver notification (lookup user account if available)
-      const driverUser = syntheticDataService.getSyntheticUserById(driver.driverId);
-      const driverUserId = driverUser ? driverUser.id || driverUser._id : driver.driverId;
-      await createNotification({
-        userId: driverUserId,
-        type: 'DRIVER_ASSIGNMENT',
-        title: 'New Collection Assignment',
-        message: `Complaint ${complaint.complaintId} (${complaint.locationText || 'Location'}) has been automatically assigned to your route.`,
-        complaintId: complaint.complaintId
-      });
-
-      return {
-        assigned: true,
-        assignmentStatus: 'ASSIGNED',
-        assignedDriverId: driver.driverId,
-        assignedDriverName: driver.name,
-        assignedVehicleNumber: driver.vehicleNumber || 'Vehicle Assigned',
-        distanceKm: distKm,
-        message: `Complaint submitted and automatically assigned to nearby driver ${driver.name} (${distKm} km).`
-      };
-    });
-  }
-
-  // 3. MongoDB Mode execution
-  // Query AVAILABLE drivers with non-null coordinates
-  const eligibleDrivers = await Driver.find({
-    availability: 'AVAILABLE',
-    'currentLocation.latitude': { $ne: null },
-    'currentLocation.longitude': { $ne: null }
-  });
-
-  const ranked = rankCandidateDrivers({ latitude: cLat, longitude: cLon }, eligibleDrivers);
-
-  if (ranked.length === 0) {
-    return {
-      assigned: false,
-      assignmentStatus: 'PENDING_DRIVER',
-      assignedDriverId: null,
-      assignedDriverName: null,
-      assignedVehicleNumber: null,
-      distanceKm: null,
-      reason: 'NO_AVAILABLE_DRIVER',
-      message: 'Complaint registered. No nearby drivers are currently available for automatic dispatch.'
-    };
-  }
-
-  // Iterate over candidates in distance order and attempt atomic claim
-  for (const candidate of ranked) {
-    const candidateDriver = candidate.driver;
-    const claimedDriver = await Driver.findOneAndUpdate(
-      { driverId: candidateDriver.driverId, availability: 'AVAILABLE' },
-      { availability: 'BUSY' },
-      { new: true }
-    );
-
-    if (!claimedDriver) {
-      // Race condition: another request claimed this driver, try next candidate
-      continue;
-    }
-
-    const distKm = Math.round(candidate.distanceKm * 100) / 100;
-
-    // Assignment succeeds: update complaint
-    complaint.status = 'ASSIGNED';
-    complaint.assignedDriverId = claimedDriver.driverId;
-    complaint.assignedDriverName = claimedDriver.name;
-    complaint.assignedVehicleNumber = claimedDriver.vehicleNumber || 'Vehicle Assigned';
-    complaint.assignedAt = now;
-    if (!complaint.statusHistory) complaint.statusHistory = [];
-    complaint.statusHistory.push({
-      status: 'ASSIGNED',
-      timestamp: now,
-      changedBy: 'System Auto-Dispatch',
-      role: 'SYSTEM',
-      note: `Automatically assigned to closest available driver ${claimedDriver.name} (${claimedDriver.vehicleNumber || 'Vehicle Assigned'}) [${distKm} km].`
-    });
-
-    if (typeof complaint.save === 'function') {
-      await complaint.save();
-    }
-
-    // Send citizen notification
-    await createNotification({
-      userId: complaint.citizenId,
-      type: 'PICKUP_ASSIGNED',
-      title: 'Garbage Pickup Assigned',
-      message: `Your complaint ${complaint.complaintId} has been automatically assigned to driver ${claimedDriver.name} (${claimedDriver.vehicleNumber || 'Collection Vehicle'}).`,
-      complaintId: complaint.complaintId
-    });
-
-    let driverTargetId = claimedDriver.driverId;
+  if (ACTIVE_STATUSES.includes(complaint.status) && complaint.assignedDriverId) return resultFor(complaint, null, true);
+  if (!isValidCoordinate(complaint.latitude, complaint.longitude)) return pending('MISSING_COMPLAINT_COORDINATES');
+  const drivers = syntheticDataService.isSyntheticMode() ? syntheticDataService.getSyntheticDrivers()
+    : await Driver.find({ availability: 'AVAILABLE' });
+  for (const candidate of rankCandidateDrivers(complaint, drivers, now)) {
     try {
-      const driverUser = await User.findOne({
-        $or: [{ driverId: claimedDriver.driverId }, { employeeId: claimedDriver.employeeId }]
-      });
-      if (driverUser) {
-        driverTargetId = driverUser.id || driverUser._id || claimedDriver.driverId;
+      const result = await reserveAssignment(complaint.complaintId, candidate.driver.driverId, {}, now);
+      Object.assign(complaint, { status: 'ASSIGNED', assignedDriverId: result.assignedDriverId,
+        assignedDriverName: result.assignedDriverName, assignedVehicleNumber: result.assignedVehicleNumber, assignedAt: result.assignedAt });
+      if (!result.idempotent && !complaint.statusHistory?.some(h => h.status === 'ASSIGNED' && h.timestamp === result.assignedAt)) {
+        if (!complaint.statusHistory) complaint.statusHistory = [];
+        complaint.statusHistory.push({ status: 'ASSIGNED', timestamp: result.assignedAt, changedBy: 'System Auto-Dispatch', role: 'SYSTEM', note: `Assigned to ${result.assignedDriverName}.` });
       }
-    } catch (e) {
-      // Gracefully fallback to driverId
+      return { ...result, distanceKm: candidate.distanceKm };
+    } catch (error) {
+      if (error.statusCode !== 409) throw error;
     }
-
-    await createNotification({
-      userId: driverTargetId,
-      type: 'DRIVER_ASSIGNMENT',
-      title: 'New Collection Assignment',
-      message: `Complaint ${complaint.complaintId} (${complaint.locationText || 'Location'}) has been automatically assigned to your route.`,
-      complaintId: complaint.complaintId
-    });
-
-    return {
-      assigned: true,
-      assignmentStatus: 'ASSIGNED',
-      assignedDriverId: claimedDriver.driverId,
-      assignedDriverName: claimedDriver.name,
-      assignedVehicleNumber: claimedDriver.vehicleNumber || 'Vehicle Assigned',
-      distanceKm: distKm,
-      message: `Complaint submitted and automatically assigned to nearby driver ${claimedDriver.name} (${distKm} km).`
-    };
   }
-
-  // All candidate claims failed due to concurrent acquisition
-  return {
-    assigned: false,
-    assignmentStatus: 'PENDING_DRIVER',
-    assignedDriverId: null,
-    assignedDriverName: null,
-    assignedVehicleNumber: null,
-    distanceKm: null,
-    reason: 'NO_AVAILABLE_DRIVER',
-    message: 'Complaint registered. No nearby drivers are currently available for automatic dispatch.'
-  };
+  return pending('NO_AVAILABLE_DRIVER');
 };
 
-module.exports = {
-  calculateHaversineDistanceKm,
-  isValidCoordinate,
-  rankCandidateDrivers,
-  autoDispatchComplaint
+// Called in the same transaction as completion/rejection. Never release capacity with other active tasks.
+const releaseDriverIfIdle = async (driverId, session) => {
+  if (!driverId) return;
+  const driver = await Driver.findOne({ driverId }).session(session);
+  if (!driver) return;
+  const active = await Complaint.exists({ assignedDriverId: driverId, status: { $in: ACTIVE_STATUSES } }).session(session);
+  await Driver.updateOne({ driverId }, { $set: { availability: active ? 'BUSY' : (driver.availability === 'OFFLINE' ? 'OFFLINE' : 'AVAILABLE') } }, { session });
 };
+// Fresh availability/location is actionable: don't wait out an old no-driver backoff.
+// This only advances the worker deadline; all reservation checks still run there.
+const wakePendingSensorPickups = async (now = Date.now()) => {
+  if (syntheticDataService.isSyntheticMode()) return;
+  try {
+    await Complaint.updateMany({ source: 'SENSOR', status: 'SUBMITTED', 'dispatchRetry.state': 'PENDING_DRIVER' },
+      { $min: { 'dispatchRetry.nextAttemptAt': now } });
+  } catch (_) { console.warn('[Dispatch] Pending pickups retain their existing retry deadlines.'); }
+};
+module.exports = { calculateHaversineDistanceKm, isValidCoordinate, hasFreshLocation, rankCandidateDrivers,
+  reserveAssignment, autoDispatchComplaint, releaseDriverIfIdle, wakePendingSensorPickups, ACTIVE_STATUSES };

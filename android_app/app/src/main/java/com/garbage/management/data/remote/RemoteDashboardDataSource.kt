@@ -32,7 +32,14 @@ class RemoteDashboardDataSource(private val apiService: ApiService) {
         return try {
             val response = apiService.getOfficerDashboard()
             if (response.isSuccessful && response.body()?.data != null) {
-                Resource.Success(response.body()!!.data!!.toDomain())
+                val dashboard = response.body()!!.data!!.toDomain()
+                if (dashboard.isSynthetic) Resource.Success(dashboard)
+                else {
+                    val binsResponse = apiService.getBins()
+                    if (binsResponse.isSuccessful && binsResponse.body()?.data != null) {
+                        Resource.Success(dashboard.copy(bins = binsResponse.body()!!.data!!))
+                    } else Resource.Error(parseErrorMessage(binsResponse.errorBody()?.string(), "Unable to load smart bins."))
+                }
             } else {
                 val errorMsg = parseErrorMessage(
                     response.errorBody()?.string(),

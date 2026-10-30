@@ -68,6 +68,7 @@ fun OfficerComplaintsScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.complaintsListState.collectAsStateWithLifecycle()
+    val dashboard by viewModel.dashboardState.collectAsStateWithLifecycle()
     var showSortMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialFilter) {
@@ -92,7 +93,12 @@ fun OfficerComplaintsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Citizen Complaints (${state.totalCount})") },
+                title = {
+                    Column {
+                        Text("Citizen Complaints (${state.totalCount})")
+                        dashboard.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(

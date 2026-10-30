@@ -2,13 +2,15 @@ const dotenv = require('dotenv');
 const path = require('path');
 
 // Load environment variables from .env
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+if (process.env.NODE_ENV !== 'test') dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const env = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   PORT: parseInt(process.env.PORT || '5000', 10),
+  DRIVER_LOCATION_MAX_AGE_MS: Number(process.env.DRIVER_LOCATION_MAX_AGE_MS || 120000),
+  DRIVER_SERVICE_RADIUS_KM: Number(process.env.DRIVER_SERVICE_RADIUS_KM || 20),
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/garbage_management',
-  JWT_SECRET: process.env.JWT_SECRET || 'dev_fallback_secret_key_smart_garbage_2026',
+  JWT_SECRET: process.env.JWT_SECRET || (process.env.NODE_ENV === 'test' ? 'local-tests-only-secret' : undefined),
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || '*',
   // Cloudinary Cloud Media Storage

@@ -8,6 +8,9 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        val backendHost = providers.gradleProperty("pilotBackendHost").orElse("192.168.1.5").get()
+        require(backendHost.matches(Regex("[A-Za-z0-9.-]+"))) { "Invalid pilotBackendHost" }
+        buildConfigField("String", "PILOT_BACKEND_HOST", "\"$backendHost\"")
         applicationId = "com.garbage.management"
         minSdk = 24
         targetSdk = 35
@@ -36,6 +39,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 

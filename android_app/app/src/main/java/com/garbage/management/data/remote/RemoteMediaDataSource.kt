@@ -66,8 +66,11 @@ class RemoteMediaDataSource(private val apiService: ApiService) {
             val complaintIdBody = complaintId?.toRequestBody("text/plain".toMediaTypeOrNull())
 
             val response = apiService.uploadMedia(filePart, folderBody, complaintIdBody)
-            if (response.isSuccessful && response.body()?.data != null) {
-                Resource.Success(response.body()!!.data!!)
+            if (response.isSuccessful) {
+                val stored = response.body()?.data
+                if (stored == null || stored.url.isNullOrBlank() || stored.publicId.isNullOrBlank() || stored.resourceType !in listOf("image", "video")) {
+                    Resource.Error("Upload response has no valid stored-media URL/public ID. The local preview is not uploaded evidence.")
+                } else Resource.Success(stored)
             } else {
                 val errorMsg = parseErrorMessage(response.errorBody()?.string(), response.message())
                 Resource.Error(errorMsg)

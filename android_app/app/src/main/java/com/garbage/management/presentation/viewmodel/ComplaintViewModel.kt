@@ -12,6 +12,7 @@ import com.garbage.management.domain.usecase.GetCitizenComplaintsUseCase
 import com.garbage.management.domain.usecase.GetComplaintByIdUseCase
 import com.garbage.management.domain.usecase.SubmitComplaintUseCase
 import com.garbage.management.utils.Resource
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -361,7 +362,9 @@ class ComplaintViewModel(
     fun loadCitizenComplaints(citizenId: String) {
         _complaintsListUiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
-            getCitizenComplaintsUseCase(citizenId).collect { list ->
+            getCitizenComplaintsUseCase(citizenId).catch { error ->
+                _complaintsListUiState.update { it.copy(isLoading = false, error = error.message) }
+            }.collect { list ->
                 _complaintsListUiState.update { current ->
                     current.copy(
                         allComplaints = list,

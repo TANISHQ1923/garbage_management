@@ -278,13 +278,18 @@ class AuthViewModel(
 
         _forgotPasswordUiState.update { it.copy(isLoading = true, generalError = null) }
         viewModelScope.launch {
-            // Simulated network delay
-            kotlinx.coroutines.delay(600)
-            _forgotPasswordUiState.update {
-                it.copy(
-                    isLoading = false,
-                    successMessage = "Password reset instructions have been requested for $email. (Mock development confirmation)"
-                )
+            try {
+                val response = appContainer.apiService.forgotPassword(mapOf("email" to email))
+                if (response.isSuccessful) {
+                    _forgotPasswordUiState.update { it.copy(isLoading = false, successMessage = response.body()?.message) }
+                } else {
+                    val message = response.errorBody()?.string()?.let {
+                        runCatching { org.json.JSONObject(it).optString("message") }.getOrNull()
+                    } ?: "Password reset unavailable. Contact municipal support."
+                    _forgotPasswordUiState.update { it.copy(isLoading = false, generalError = message) }
+                }
+            } catch (error: Exception) {
+                _forgotPasswordUiState.update { it.copy(isLoading = false, generalError = "Unable to reach password reset service.") }
             }
         }
     }

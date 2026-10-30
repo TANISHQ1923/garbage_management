@@ -1,3 +1,13 @@
+jest.mock('../src/services/evidenceService', () => ({ requireStoredEvidence: jest.fn(async (c, u, url) => ({ publicId: url.includes('old') ? 'old_photo_123' : 'new_photo_456', url })) }));
+jest.mock('../src/services/transactionService', () => ({ withTransaction: jest.fn(fn => fn({})) }));
+// Query-shaped mock with an independent transaction snapshot; never connects to MongoDB.
+const query = value => {
+  const snapshot = value ? { ...value, statusHistory: [...(value.statusHistory || [])] } : value;
+  const promise = Promise.resolve(value);
+  promise.session = () => Promise.resolve(snapshot);
+  return promise;
+};
+jest.mock('../src/config/db', () => ({ getDBStatus: jest.fn(() => ({ isConnected: true, state: 'connected' })) }));
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -125,13 +135,13 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
       expect(res.body.success).toBe(false);
     });
 
-    it('should return safe info message on forgot-password', async () => {
+    it('should report that password reset is not configured', async () => {
       const res = await request(app)
         .post('/api/auth/forgot-password')
         .send({ email: 'citizen@example.com' });
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(res.body.message).toContain('password reset instructions');
+      expect(res.status).toBe(501);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain('not configured');
     });
 
     it('should register a new user successfully and never expose passwordHash', async () => {
@@ -304,7 +314,7 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
         status: 'SUBMITTED'
       };
 
-      jest.spyOn(Complaint, 'findOne').mockResolvedValueOnce(otherCitizenComplaint);
+      jest.spyOn(Complaint, 'findOne').mockReturnValue(query(otherCitizenComplaint));
 
       const res = await request(app)
         .get('/api/complaints/CMP-OTHER-001')
@@ -327,18 +337,19 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
     it('should assign a driver and update status to ASSIGNED', async () => {
       const mockComplaintDoc = {
         complaintId: 'CMP-101',
+        latitude: 28.625, longitude: 77.215,
         citizenId: mockCitizenUser.id,
         status: 'SUBMITTED',
         statusHistory: [],
         save: jest.fn().mockResolvedValue(true)
       };
 
-      jest.spyOn(Complaint, 'findOne').mockResolvedValueOnce(mockComplaintDoc);
-      jest.spyOn(Driver, 'findOne').mockResolvedValueOnce({
-        driverId: 'DRV-882',
-        name: 'Ramesh Kumar',
-        vehicleNumber: 'DL-01-GB-4040'
-      });
+      jest.spyOn(Complaint, 'findOne').mockReturnValue(query(mockComplaintDoc));
+      const d = { driverId: 'DRV-882', name: 'Ramesh Kumar', vehicleNumber: 'DL-01-GB-4040', availability: 'AVAILABLE',
+        currentLocation: { latitude: 28.625, longitude: 77.215, source: 'DEVICE', timestamp: Date.now() } };
+      jest.spyOn(Driver, 'findOne').mockReturnValue(query(d));
+      jest.spyOn(Driver, 'findOneAndUpdate').mockResolvedValue(d);
+      jest.spyOn(Complaint, 'exists').mockReturnValue(query(null));
       jest.spyOn(User, 'findOne').mockResolvedValueOnce(mockDriverUser);
       jest.spyOn(Notification, 'create').mockResolvedValue({});
 
@@ -353,8 +364,8 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(mockComplaintDoc.status).toBe('ASSIGNED');
-      expect(mockComplaintDoc.assignedDriverId).toBe('DRV-882');
+      expect(res.body.assignment.assigned).toBe(true);
+      expect(res.body.assignment.assignedDriverId).toBe('DRV-882');
     });
 
     it('should reject invalid status transition (e.g. SUBMITTED -> CLEANED) with 400 Bad Request', async () => {
@@ -363,7 +374,7 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
         status: 'SUBMITTED'
       };
 
-      jest.spyOn(Complaint, 'findOne').mockResolvedValueOnce(mockComplaintDoc);
+      jest.spyOn(Complaint, 'findOne').mockReturnValue(query(mockComplaintDoc));
 
       const res = await request(app)
         .put('/api/officer/complaints/CMP-101/status')
@@ -394,7 +405,7 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
         save: jest.fn().mockResolvedValue(true)
       };
 
-      jest.spyOn(Complaint, 'findOne').mockResolvedValueOnce(mockTask);
+      jest.spyOn(Complaint, 'findOne').mockReturnValue(query(mockTask));
       jest.spyOn(Driver, 'findOneAndUpdate').mockResolvedValue({});
       jest.spyOn(Notification, 'create').mockResolvedValue({});
 
@@ -422,6 +433,9 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
     });
 
     it('should SUCCEED completeCollection when after-cleaning photo is provided', async () => {
+      jest.spyOn(Driver, 'findOne').mockReturnValue(query({ driverId: 'DRV-882', availability: 'BUSY' }));
+      jest.spyOn(Complaint, 'exists').mockReturnValue(query(null));
+      jest.spyOn(Driver, 'updateOne').mockResolvedValue({});
       const mockTask = {
         complaintId: 'CMP-202',
         citizenId: mockCitizenUser.id,
@@ -431,7 +445,7 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
         save: jest.fn().mockResolvedValue(true)
       };
 
-      jest.spyOn(Complaint, 'findOne').mockResolvedValueOnce(mockTask);
+      jest.spyOn(Complaint, 'findOne').mockReturnValue(query(mockTask));
       jest.spyOn(Driver, 'findOneAndUpdate').mockResolvedValue({});
       jest.spyOn(Notification, 'create').mockResolvedValue({});
 
@@ -449,6 +463,7 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
     });
 
     it('should update and query driver GPS location coordinates', async () => {
+      jest.spyOn(Complaint, 'updateMany').mockResolvedValue({});
       const mockDriverDoc = {
         driverId: 'DRV-882',
         currentLocation: {
@@ -463,7 +478,7 @@ describe('Smart Garbage Management Backend API Test Suite', () => {
       const putRes = await request(app)
         .put('/api/driver/location')
         .set('Authorization', `Bearer ${driverToken}`)
-        .send({ latitude: 28.625, longitude: 77.215 });
+        .send({ latitude: 28.625, longitude: 77.215, capturedAt: Date.now() });
 
       expect(putRes.status).toBe(200);
       expect(putRes.body.success).toBe(true);

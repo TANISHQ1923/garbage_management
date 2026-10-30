@@ -82,7 +82,7 @@ class FeedbackTest {
 
     @Test
     fun testSubmitFeedbackUseCaseValidation() = runBlocking {
-        val localDataSource = LocalComplaintDataSource()
+        val localDataSource = LocalComplaintDataSource(demoMode = true)
         val repository = ComplaintRepositoryImpl(localDataSource)
         val useCase = SubmitFeedbackUseCase(repository)
 

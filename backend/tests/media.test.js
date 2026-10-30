@@ -1,3 +1,5 @@
+jest.mock('../src/services/evidenceService', () => ({ requireStoredEvidence: jest.fn(async (c, u, url, folder) => ({ publicId: `smart-garbage/${folder}/new_photo_456`, url })) }));
+jest.mock('../src/config/db', () => ({ getDBStatus: jest.fn(() => ({ isConnected: true, state: 'connected' })) }));
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const { Writable } = require('stream');
@@ -359,7 +361,7 @@ describe('Step 8: Cloudinary Media Storage & Evidence Integration', () => {
 
     expect(res.status).toBe(503);
     expect(res.body.success).toBe(false);
-    expect(res.body.message).toMatch(/Cloudinary media storage is not configured/i);
+    expect(res.body.message).toMatch(/Photo storage is not configured/i);
 
     // Restore config
     env.CLOUDINARY_CLOUD_NAME = origCloudName;

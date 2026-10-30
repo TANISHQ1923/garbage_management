@@ -38,6 +38,9 @@ import retrofit2.http.Query
  * Retrofit interface defining REST API contracts for the Smart Garbage Management backend.
  */
 interface ApiService {
+    @GET("bins")
+    suspend fun getBins(): Response<ApiResponseDto<List<com.garbage.management.domain.model.SmartBinStatus>>>
+
 
     // =========================================================================
     // HEALTH CHECK
@@ -161,6 +164,11 @@ interface ApiService {
         @Path("id") id: String,
         @Body request: UpdateEvidenceRequestDto
     ): Response<ApiResponseDto<ComplaintDto>>
+
+    @PUT("driver/availability")
+    suspend fun updateDriverAvailability(
+        @Body request: Map<String, String>
+    ): Response<ApiResponseDto<Map<String, String>>>
 
     @PUT("driver/location")
     suspend fun updateDriverLocation(

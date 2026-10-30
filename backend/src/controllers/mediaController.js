@@ -16,7 +16,21 @@ const handleUpload = async (req, res, next) => {
     const folder = req.body.folder || 'complaints';
     const complaintId = req.body.complaintId || null;
 
+    const evidence = ['before-cleaning', 'after-cleaning'].includes(folder);
+    if (evidence) {
+      const complaint = complaintId && await require('../models/Complaint').findOne({ complaintId });
+      if (!complaint || req.user.role !== 'GARBAGE_DRIVER' || complaint.assignedDriverId !== req.user.driverId) {
+        return res.status(403).json({ success: false, message: 'Photo evidence may only be uploaded by the assigned driver for this task.' });
+      }
+      if (!['ASSIGNED', 'PICKUP_IN_PROGRESS'].includes(complaint.status)) {
+        return res.status(409).json({ success: false, message: 'This task no longer accepts pickup evidence uploads.' });
+      }
+      if (!req.file.mimetype?.startsWith('image/')) return res.status(400).json({ success: false, message: 'Pickup evidence must be an image.' });
+    }
+
     const result = await uploadMedia(req.file, { folder, complaintId });
+    if (evidence) await require('../models/StoredMedia').create({ publicId: result.publicId, url: result.url,
+      resourceType: result.resourceType, complaintId, folder, uploadedBy: String(req.user.id || req.user._id) });
 
     return res.status(200).json({
       success: true,

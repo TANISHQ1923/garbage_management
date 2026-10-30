@@ -137,6 +137,8 @@ fun NotificationsScreen(
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
+            } else if (state.error != null) {
+                Text(state.error ?: "Unable to load notifications.", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(24.dp))
             } else if (state.notifications.isEmpty()) {
                 // EMPTY STATE
                 Box(

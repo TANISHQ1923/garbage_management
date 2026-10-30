@@ -172,6 +172,35 @@ fun OfficerHomeScreen(
                     }
                 }
 
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Smart bins", style = MaterialTheme.typography.titleMedium)
+                        TextButton(onClick = { officerViewModel.loadOfficerDashboard() }) { Text("Refresh") }
+                    }
+                    Text("Foreground refresh only. Health and fill are as of the last refresh.", style = MaterialTheme.typography.bodySmall)
+                    if (dashboardState.bins.isEmpty()) Text("No registered bins.", style = MaterialTheme.typography.bodySmall)
+                }
+                items(dashboardState.bins, key = { "bin-" + it.binId }) { bin ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${bin.label} (${bin.binId})", fontWeight = FontWeight.Bold)
+                            val fill = bin.fillPercent?.let { String.format(java.util.Locale.US, "%.0f%%", it) } ?: "Unknown"
+                            Text("Last valid fill: $fill · ${bin.health}")
+                            Text("${bin.locationText} · ${bin.readingReason ?: "No data"}", style = MaterialTheme.typography.bodySmall)
+                            Text("Measured: ${bin.lastMeasurementAt?.let { formatTimestamp(it) } ?: "Never"}", style = MaterialTheme.typography.bodySmall)
+                            Text("Contact: ${bin.lastContactAt?.let { formatTimestamp(it) } ?: "Never"}", style = MaterialTheme.typography.bodySmall)
+                            bin.pickupTaskId?.let { taskId ->
+                                TextButton(onClick = { onNavigateToComplaintDetail(taskId) }) { Text("Pickup: ${bin.pickupStatus ?: "Pending"}") }
+                                Text("${bin.dispatchState ?: ""} · ${bin.dispatchReason ?: bin.assignedDriverName ?: ""}", style = MaterialTheme.typography.bodySmall)
+                                bin.nextRetryAt?.let { Text("Retry: ${formatTimestamp(it)}", style = MaterialTheme.typography.bodySmall) }
+                            }
+                            bin.sensorEmptyConfirmedAt?.let {
+                                Text("Sensor empty: ${formatTimestamp(it)}. Cleanup verification is separate.", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+
                 // 1. OFFICER IDENTITY HEADER
                 item {
                     OfficerHeaderCard(

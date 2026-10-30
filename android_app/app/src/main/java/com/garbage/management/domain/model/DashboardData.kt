@@ -22,6 +22,7 @@ data class CitizenDashboardData(
  * Domain model representing aggregated dashboard state for the Municipal Officer Dashboard.
  */
 data class OfficerDashboardData(
+    val bins: List<SmartBinStatus> = emptyList(),
     val totalComplaints: Int = 0,
     val submitted: Int = 0,
     val assigned: Int = 0,

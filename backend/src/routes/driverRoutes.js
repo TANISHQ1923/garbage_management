@@ -7,7 +7,8 @@ const {
   updateEvidence,
   updateLocation,
   getLocation,
-  getHistory
+  getHistory,
+  updateAvailability
 } = require('../controllers/driverController');
 const { authenticate } = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
@@ -24,6 +25,7 @@ router.put('/complaints/:id/start', startCollection);
 router.put('/complaints/:id/complete', completeCollection);
 router.put('/complaints/:id/evidence', updateEvidence);
 router.put('/location', updateLocation);
+router.put('/availability', updateAvailability);
 router.get('/location', getLocation);
 router.get('/history', getHistory);
 

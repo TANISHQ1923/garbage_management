@@ -157,7 +157,7 @@ class PriorityQueueTest {
     fun testLocalPriorityQueueSortingAndDeduplication() {
         val now = 1_000_000_000_000L
         val hourMs = 3600 * 1000L
-        val dataSource = LocalComplaintDataSource()
+        val dataSource = LocalComplaintDataSource(demoMode = true)
 
         val queue = dataSource.getPriorityQueue(now)
 
@@ -195,7 +195,7 @@ class PriorityQueueTest {
 
     @Test
     fun testGetPriorityQueueUseCaseAndRepository() = runBlocking {
-        val localDataSource = LocalComplaintDataSource()
+        val localDataSource = LocalComplaintDataSource(demoMode = true)
         val repository = com.garbage.management.data.repository.ComplaintRepositoryImpl(localDataSource)
         val useCase = GetPriorityQueueUseCase(repository)
 

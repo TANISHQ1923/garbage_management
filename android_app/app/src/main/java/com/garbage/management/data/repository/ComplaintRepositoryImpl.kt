@@ -66,7 +66,7 @@ class ComplaintRepositoryImpl(
             if (remoteResult is Resource.Success && remoteResult.data != null) {
                 localDataSource?.addOrUpdateComplaint(remoteResult.data)
                 remoteResult
-            } else if (localDataSource != null) {
+            } else if (isLocalOnly && localDataSource != null) {
                 localDataSource.addOrUpdateComplaint(complaint)
                 Resource.Success(complaint)
             } else {
@@ -91,13 +91,7 @@ class ComplaintRepositoryImpl(
                     list.forEach { localDataSource?.addOrUpdateComplaint(it) }
                     emit(list)
                 }
-                is Resource.Error -> {
-                    if (cached.isNotEmpty()) {
-                        emit(cached)
-                    } else {
-                        emit(emptyList())
-                    }
-                }
+                is Resource.Error -> throw IllegalStateException(remote.message ?: "Unable to load complaints.")
                 is Resource.Loading -> Unit
             }
         }.flowOn(Dispatchers.IO)
@@ -118,12 +112,7 @@ class ComplaintRepositoryImpl(
             if (remoteResult is Resource.Success && remoteResult.data != null) {
                 remoteResult
             } else {
-                val cached = localDataSource?.getComplaintById(complaintId)
-                if (cached != null) {
-                    Resource.Success(cached)
-                } else {
-                    remoteResult
-                }
+                remoteResult
             }
         }
 
@@ -143,11 +132,7 @@ class ComplaintRepositoryImpl(
                     val list = remote.data ?: emptyList()
                     emit(list)
                 }
-                is Resource.Error -> {
-                    if (cached.isEmpty()) {
-                        emit(emptyList())
-                    }
-                }
+                is Resource.Error -> throw IllegalStateException(remote.message ?: "Unable to load tasks.")
                 is Resource.Loading -> Unit
             }
         }.flowOn(Dispatchers.IO)
@@ -165,7 +150,7 @@ class ComplaintRepositoryImpl(
                 Resource.Success(list)
             }
             is Resource.Error -> {
-                if (localDataSource != null) {
+                if (isLocalOnly && localDataSource != null) {
                     val fallback = localDataSource.getPriorityQueue()
                     Resource.Success(fallback)
                 } else {
@@ -203,7 +188,7 @@ class ComplaintRepositoryImpl(
         if (remoteResult is Resource.Success && remoteResult.data != null) {
             localDataSource?.assignDriver(complaintId, driver, officerId, officerName, noteText)
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.assignDriver(complaintId, driver, officerId, officerName, noteText)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {
@@ -236,7 +221,7 @@ class ComplaintRepositoryImpl(
         if (remoteResult is Resource.Success && remoteResult.data != null) {
             localDataSource?.updateComplaintStatus(complaintId, newStatus, officerId, officerName, noteText)
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.updateComplaintStatus(complaintId, newStatus, officerId, officerName, noteText)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {
@@ -265,7 +250,7 @@ class ComplaintRepositoryImpl(
         if (remoteResult is Resource.Success && remoteResult.data != null) {
             localDataSource?.addOfficerNote(complaintId, note)
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.addOfficerNote(complaintId, note)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {
@@ -289,11 +274,7 @@ class ComplaintRepositoryImpl(
                     val list = remote.data ?: emptyList()
                     emit(list)
                 }
-                is Resource.Error -> {
-                    if (cached.isEmpty()) {
-                        emit(emptyList())
-                    }
-                }
+                is Resource.Error -> throw IllegalStateException(remote.message ?: "Unable to load tasks.")
                 is Resource.Loading -> Unit
             }
         }.flowOn(Dispatchers.IO)
@@ -322,7 +303,7 @@ class ComplaintRepositoryImpl(
         if (remoteResult is Resource.Success && remoteResult.data != null) {
             localDataSource?.startCollection(complaintId, driverId, driverName, beforeCleaningUri)
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.startCollection(complaintId, driverId, driverName, beforeCleaningUri)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {
@@ -353,7 +334,7 @@ class ComplaintRepositoryImpl(
         if (remoteResult is Resource.Success && remoteResult.data != null) {
             localDataSource?.updateCollectionEvidence(complaintId, beforeCleaningUri, afterCleaningUri)
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.updateCollectionEvidence(complaintId, beforeCleaningUri, afterCleaningUri)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {
@@ -398,7 +379,7 @@ class ComplaintRepositoryImpl(
                 beforeCleaningUri = beforeCleaningUri
             )
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.completeCollection(
                 complaintId = complaintId,
                 driverId = driverId,
@@ -441,7 +422,7 @@ class ComplaintRepositoryImpl(
             val feedbackToSave = remoteResult.data.feedback ?: fallbackFeedback
             localDataSource?.submitFeedback(complaintId, feedbackToSave)
             remoteResult
-        } else if (localDataSource != null) {
+        } else if (isLocalOnly && localDataSource != null) {
             val updated = localDataSource.submitFeedback(complaintId, fallbackFeedback)
             if (updated != null) Resource.Success(updated) else remoteResult
         } else {

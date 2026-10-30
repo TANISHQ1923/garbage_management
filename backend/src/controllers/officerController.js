@@ -291,82 +291,17 @@ const assignDriver = async (req, res, next) => {
       });
     }
 
-    // Lookup driver information if name or vehicle number was omitted
-    let finalDriverName = driverName;
-    let finalVehicleNumber = vehicleNumber;
-    let driverUserRecord = null;
-
-    const isDriverFindMocked = typeof Driver.findOne === 'function' && Boolean(Driver.findOne._isMockFunction);
-    if (isDriverFindMocked || !syntheticDataService.isSyntheticMode()) {
-      try {
-        const driverDoc = await Driver.findOne({ driverId });
-        if (driverDoc) {
-          finalDriverName = finalDriverName || driverDoc.name;
-          finalVehicleNumber = finalVehicleNumber || driverDoc.vehicleNumber;
-        }
-
-        driverUserRecord = await User.findOne({
-          $or: [{ driverId }, { employeeId: driverDoc?.employeeId }]
-        });
-      } catch (e) {
-        // Graceful fallback
-      }
-    } else {
-      const synDriver = syntheticDataService.getSyntheticDrivers().find((d) => d.driverId === driverId);
-      if (synDriver) {
-        finalDriverName = finalDriverName || synDriver.name;
-        finalVehicleNumber = finalVehicleNumber || synDriver.vehicleNumber;
-      }
-      driverUserRecord = syntheticDataService.getSyntheticUserById(driverId);
-    }
-
-    const now = Date.now();
-    complaint.status = 'ASSIGNED';
-    complaint.assignedDriverId = driverId;
-    complaint.assignedDriverName = finalDriverName || driverId;
-    complaint.assignedVehicleNumber = finalVehicleNumber || 'Pending';
-    complaint.assignedAt = now;
-
-    if (!complaint.statusHistory) complaint.statusHistory = [];
-    complaint.statusHistory.push({
-      status: 'ASSIGNED',
-      timestamp: now,
-      changedBy: req.user.name,
-      role: req.user.role,
-      note: noteText || `Assigned to driver ${finalDriverName || driverId} (${finalVehicleNumber || 'Vehicle Assigned'}).`
-    });
-
-    if (typeof complaint.save === 'function') {
-      await complaint.save();
-    }
-    if (syntheticDataService.isSyntheticMode()) {
-      syntheticDataService.updateSyntheticComplaint(complaint.complaintId || complaint.id, complaint);
-      syntheticDataService.updateSyntheticDriverAvailability(driverId, 'BUSY');
-    }
-
-    // Notify citizen
-    await createNotification({
-      userId: complaint.citizenId,
-      type: 'PICKUP_ASSIGNED',
-      title: 'Garbage Pickup Assigned',
-      message: `Your complaint ${complaint.complaintId} has been assigned to driver ${finalDriverName || driverId} (${finalVehicleNumber || 'Truck'}).`,
-      complaintId: complaint.complaintId
-    });
-
-    // Notify driver (using User._id or driverId)
-    const driverTargetId = driverUserRecord ? (driverUserRecord.id || driverUserRecord._id) : driverId;
-    await createNotification({
-      userId: driverTargetId,
-      type: 'DRIVER_ASSIGNMENT',
-      title: 'New Collection Assignment',
-      message: `Complaint ${complaint.complaintId} (${complaint.locationText || 'Location'}) has been assigned to your route.`,
-      complaintId: complaint.complaintId
-    });
+    const { reserveAssignment } = require('../services/dispatchService');
+    const assignment = await reserveAssignment(complaint.complaintId, driverId, req.user);
+    const updated = syntheticDataService.isSyntheticMode()
+      ? syntheticDataService.getSyntheticComplaints().find(c => c.complaintId === complaint.complaintId)
+      : await Complaint.findOne({ complaintId: complaint.complaintId });
 
     return res.status(200).json({
       success: true,
       message: 'Driver assigned successfully',
-      data: complaint
+      data: updated,
+      assignment
     });
   } catch (error) {
     next(error);
@@ -383,6 +318,9 @@ const updateStatus = async (req, res, next) => {
     const { status: targetStatus, newStatus, noteText } = req.body;
     const finalTargetStatus = targetStatus || newStatus;
 
+    if (finalTargetStatus === 'ASSIGNED') {
+      return res.status(400).json({ success: false, message: 'Use the driver assignment endpoint.' });
+    }
     if (!finalTargetStatus) {
       return res.status(400).json({
         success: false,
@@ -408,6 +346,7 @@ const updateStatus = async (req, res, next) => {
       });
     }
 
+    const expectedStatus = complaint.status;
     const now = Date.now();
     complaint.status = finalTargetStatus;
     complaint.statusHistory.push({
@@ -418,11 +357,11 @@ const updateStatus = async (req, res, next) => {
       note: noteText || `Status transitioned to ${finalTargetStatus} by municipal officer.`
     });
 
-    await complaint.save();
+    await require('../services/taskTransitionService').commitTransition(complaint, expectedStatus);
 
     // Citizen notification on verification
     if (finalTargetStatus === 'VERIFIED') {
-      await createNotification({
+      if (complaint.citizenId) await createNotification({
         userId: complaint.citizenId,
         type: 'CLEANUP_VERIFIED',
         title: 'Cleanup Verified & Closed',
@@ -430,7 +369,7 @@ const updateStatus = async (req, res, next) => {
         complaintId: complaint.complaintId
       });
     } else {
-      await createNotification({
+      if (complaint.citizenId) await createNotification({
         userId: complaint.citizenId,
         type: 'COMPLAINT_STATUS_UPDATED',
         title: 'Complaint Status Updated',

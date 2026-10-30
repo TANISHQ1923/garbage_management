@@ -85,14 +85,25 @@ const complaintSchema = new mongoose.Schema(
       trim: true,
       index: true
     },
+    source: { type: String, enum: ['CITIZEN', 'SENSOR'], default: 'CITIZEN' },
+    binId: { type: String, default: null },
+    activeSensorTask: { type: Boolean, default: false },
+    sensorEmptyConfirmedAt: { type: Number, default: null },
+    dispatchRetry: {
+      state: { type: String, enum: ['PENDING_DRIVER', 'ASSIGNED', 'CLOSED'], default: undefined },
+      attempts: { type: Number, default: 0 },
+      nextAttemptAt: { type: Number, default: null },
+      reason: { type: String, default: null },
+      leaseUntil: { type: Number, default: 0 }
+    },
     citizenId: {
       type: String,
-      required: [true, 'Citizen ID is required'],
+      required: function () { return this.source !== 'SENSOR'; },
       index: true
     },
     citizenName: {
       type: String,
-      required: [true, 'Citizen Name is required']
+      required: function () { return this.source !== 'SENSOR'; }
     },
     citizenPhone: {
       type: String,
@@ -221,6 +232,10 @@ const complaintSchema = new mongoose.Schema(
     timestamps: true
   }
 );
+
+complaintSchema.index({ binId: 1 }, { name: 'one_active_sensor_task_per_bin', unique: true,
+  partialFilterExpression: { source: 'SENSOR', activeSensorTask: true } });
+complaintSchema.index({ source: 1, status: 1, 'dispatchRetry.nextAttemptAt': 1 });
 
 complaintSchema.set('toJSON', {
   transform: function (doc, ret) {

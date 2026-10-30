@@ -84,6 +84,7 @@ data class DriverLocationDto(
 }
 
 data class UpdateLocationRequestDto(
+    @SerializedName("capturedAt") val capturedAt: Long,
     @SerializedName("latitude")
     val latitude: Double,
 

@@ -168,12 +168,6 @@ fun DriverTaskDetailsScreen(
         }
     }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            driverViewModel.clearFeedback()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -217,6 +211,17 @@ fun DriverTaskDetailsScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    uiState.errorMessage?.let { message ->
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                            Text(message, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                    }
+
+                    if (complaint.source == "SENSOR") {
+                        Text("Smart-bin pickup: ${complaint.binId ?: ""}", style = MaterialTheme.typography.titleMedium)
+                        complaint.sensorEmptyConfirmedAt?.let { Text("Sensor empty is separate from cleanup verification.") }
+                    }
+
                     // 1. HEADER OVERVIEW CARD
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -649,11 +654,11 @@ fun DriverTaskDetailsScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Text(
-                                text = "• Before Photo: ${if (!uiState.draftBeforeImageUri.isNullOrBlank()) "Attached ✓" else "Not provided"}",
+                                text = "• Before Photo: ${if (!uiState.draftBeforeImageUri.isNullOrBlank()) if (uiState.draftBeforeImageUri?.startsWith("https://") == true) "Uploaded reference" else "Selected, upload pending" else "Not provided"}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                             Text(
-                                text = "• After Photo: ${if (!uiState.draftAfterImageUri.isNullOrBlank()) "Attached ✓" else "Missing"}",
+                                text = "• After Photo: ${if (!uiState.draftAfterImageUri.isNullOrBlank()) if (uiState.draftAfterImageUri?.startsWith("https://") == true) "Uploaded reference" else "Selected, upload pending" else "Missing"}",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (!uiState.draftAfterImageUri.isNullOrBlank()) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error

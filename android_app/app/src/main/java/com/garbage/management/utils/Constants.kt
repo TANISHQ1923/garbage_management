@@ -1,5 +1,7 @@
 package com.garbage.management.utils
 
+import com.garbage.management.BuildConfig
+
 /**
  * Centralized application constants.
  * Configure the backend URL here to switch between Android Emulator,
@@ -10,7 +12,8 @@ object Constants {
      * Development host machine IP for physical devices connected via Wi-Fi.
      * Update this if your machine's Wi-Fi IP address changes.
      */
-    const val DEV_MACHINE_IP = "10.20.10.221"
+    // Use -PpilotBackendHost=127.0.0.1 with adb reverse for a physical USB phone.
+    const val DEV_MACHINE_IP = BuildConfig.PILOT_BACKEND_HOST
     const val SERVER_PORT = 5000
 
     /**

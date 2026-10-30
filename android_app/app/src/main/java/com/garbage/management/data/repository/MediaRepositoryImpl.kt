@@ -23,13 +23,10 @@ class MediaRepositoryImpl(
         return when (val result = remoteMediaDataSource.uploadMedia(context, uri, folder, complaintId)) {
             is Resource.Success -> {
                 val data = result.data!!
-                Resource.Success(
-                    UploadedMedia(
-                        url = data.url,
-                        publicId = data.publicId,
-                        resourceType = data.resourceType
-                    )
-                )
+                val stored = UploadedMedia(url = data.url, publicId = data.publicId, resourceType = data.resourceType)
+                if (!com.garbage.management.utils.StoredMediaReference.isStoredImage(stored) && folder != "videos") {
+                    Resource.Error("Upload returned no valid stored image reference. Photo preview does not prove upload success.")
+                } else Resource.Success(stored)
             }
             is Resource.Error -> Resource.Error(result.message ?: "Failed to upload media.")
             is Resource.Loading -> Resource.Loading()

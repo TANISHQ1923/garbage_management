@@ -19,6 +19,12 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorMiddleware'
 
 const app = express();
 
+// Fail closed before any database-dependent API runs. Demo mode is explicit.
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health' || env.USE_SYNTHETIC_DATA || getDBStatus().isConnected) return next();
+  return res.status(503).json({ success: false, message: 'Database unavailable. Please retry later.' });
+});
+
 // Security headers
 app.use(helmet());
 
@@ -61,6 +67,8 @@ app.use('/api/driver', driverRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/bins', require('./routes/binRoutes'));
+app.use('/api/device', require('./routes/sensorRoutes'));
 
 // Catch-all 404 handler
 app.use(notFoundHandler);

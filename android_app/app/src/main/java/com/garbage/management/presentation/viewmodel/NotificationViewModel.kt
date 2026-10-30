@@ -11,6 +11,7 @@ import com.garbage.management.domain.usecase.GetNotificationsUseCase
 import com.garbage.management.domain.usecase.GetUnreadNotificationCountUseCase
 import com.garbage.management.domain.usecase.MarkAllNotificationsReadUseCase
 import com.garbage.management.domain.usecase.MarkNotificationReadUseCase
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,7 +61,9 @@ class NotificationViewModel(
         _notificationsUiState.update { it.copy(isLoading = true) }
 
         viewModelScope.launch {
-            getNotificationsUseCase(userId).collect { list ->
+            getNotificationsUseCase(userId).catch { error ->
+                _notificationsUiState.update { it.copy(isLoading = false, error = error.message) }
+            }.collect { list ->
                 _notificationsUiState.update { current ->
                     current.copy(
                         notifications = list,

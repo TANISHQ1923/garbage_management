@@ -57,13 +57,11 @@ class DriverLocationRepositoryImpl(
     }
 
     override suspend fun updateDriverLocation(location: DriverLocation) = withContext(Dispatchers.IO) {
-        localDataSource.updateDriverLocation(location)
         if (!isLocalOnly) {
-            remoteDataSource.updateDriverLocation(
-                latitude = location.latitude,
-                longitude = location.longitude
-            )
+            val result = remoteDataSource.updateDriverLocation(location.latitude, location.longitude, location.timestamp)
+            if (result is Resource.Error) throw IllegalStateException(result.message ?: "Location update failed.")
         }
+        localDataSource.updateDriverLocation(location)
         Unit
     }
 }

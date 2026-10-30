@@ -21,7 +21,8 @@ object ApiClient {
         sessionManager: SessionManager? = null
     ): ApiService {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            // Login requests/responses contain passwords and tokens; never log their bodies.
+            level = HttpLoggingInterceptor.Level.BASIC
             redactHeader("Authorization")
         }
 
@@ -50,34 +51,7 @@ object ApiClient {
             chain.proceed(requestBuilder.build())
         }
 
-        val hostFallbackInterceptor = Interceptor { chain ->
-            val request = chain.request()
-            try {
-                chain.proceed(request)
-            } catch (e: java.io.IOException) {
-                val originalHost = request.url.host
-                val candidateHosts = if (Constants.isEmulator()) {
-                    listOf("10.0.2.2", Constants.DEV_MACHINE_IP, "127.0.0.1")
-                } else {
-                    listOf(Constants.DEV_MACHINE_IP, "127.0.0.1", "10.0.2.2")
-                }.distinct().filter { it != originalHost }
-
-                var lastException: java.io.IOException = e
-                for (altHost in candidateHosts) {
-                    val fallbackUrl = request.url.newBuilder().host(altHost).build()
-                    val fallbackRequest = request.newBuilder().url(fallbackUrl).build()
-                    try {
-                        return@Interceptor chain.proceed(fallbackRequest)
-                    } catch (altEx: java.io.IOException) {
-                        lastException = altEx
-                    }
-                }
-                throw lastException
-            }
-        }
-
         val okHttpClient = OkHttpClient.Builder()
-            .addInterceptor(hostFallbackInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10L, TimeUnit.SECONDS)
@@ -93,3 +67,4 @@ object ApiClient {
             .create(ApiService::class.java)
     }
 }
+

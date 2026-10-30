@@ -23,7 +23,8 @@ import java.io.File
  * Preloaded with realistic initial complaints and persisted locally so complaints survive disconnections and app restarts.
  */
 class LocalComplaintDataSource(
-    private val context: Context? = null
+    private val context: Context? = null,
+    private val demoMode: Boolean = false
 ) {
 
     private val gson = Gson()
@@ -349,7 +350,7 @@ class LocalComplaintDataSource(
     )
 
     private val complaintsFlow = MutableStateFlow<List<GarbageComplaint>>(
-        loadFromDisk() ?: defaultComplaints
+        if (demoMode) (loadFromDisk() ?: defaultComplaints) else emptyList()
     )
 
     fun addComplaint(complaint: GarbageComplaint) {

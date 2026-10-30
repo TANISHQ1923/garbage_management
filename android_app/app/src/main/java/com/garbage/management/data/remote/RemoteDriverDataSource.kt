@@ -105,9 +105,17 @@ class RemoteDriverDataSource(private val apiService: ApiService) {
         }
     }
 
-    suspend fun updateDriverLocation(latitude: Double, longitude: Double): Resource<DriverLocation> {
+    suspend fun updateAvailability(availability: String): Resource<Unit> = try {
+        val response = apiService.updateDriverAvailability(mapOf("availability" to availability))
+        if (response.isSuccessful) Resource.Success(Unit)
+        else Resource.Error(parseErrorMessage(response.errorBody()?.string(), response.message()))
+    } catch (error: Exception) {
+        Resource.Error(error.localizedMessage ?: "Availability update failed.")
+    }
+
+    suspend fun updateDriverLocation(latitude: Double, longitude: Double, capturedAt: Long): Resource<DriverLocation> {
         return try {
-            val request = UpdateLocationRequestDto(latitude = latitude, longitude = longitude)
+            val request = UpdateLocationRequestDto(latitude = latitude, longitude = longitude, capturedAt = capturedAt)
             val response = apiService.updateDriverLocation(request)
             if (response.isSuccessful && response.body()?.data != null) {
                 Resource.Success(response.body()!!.data!!.toDomain())

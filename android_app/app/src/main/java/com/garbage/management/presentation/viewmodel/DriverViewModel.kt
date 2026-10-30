@@ -50,7 +50,7 @@ data class DriverUiState(
     val activeTask: GarbageComplaint? = null,
     val activeDriverLocation: DriverLocation? = null,
     val isUpdatingLocation: Boolean = false,
-    val driverAvailability: DriverAvailability = DriverAvailability.AVAILABLE,
+    val driverAvailability: DriverAvailability = DriverAvailability.OFFLINE,
     val selectedFilter: DriverTaskFilter = DriverTaskFilter.ALL,
     val selectedSort: DriverTaskSort = DriverTaskSort.EMERGENCY_FIRST,
     val selectedHistoryFilter: HistoryFilter = HistoryFilter.TODAY,
@@ -86,6 +86,7 @@ class DriverViewModel(
     private val getDriverLocationUseCase: GetDriverLocationUseCase,
     private val getComplaintByIdUseCase: GetComplaintByIdUseCase,
     private val localDriverDataSource: com.garbage.management.data.local.LocalDriverDataSource,
+    private val remoteDriverDataSource: com.garbage.management.data.remote.RemoteDriverDataSource? = null,
     private val mediaRepository: com.garbage.management.domain.repository.MediaRepository? = null,
     private val getDriverDashboardUseCase: com.garbage.management.domain.usecase.GetDriverDashboardUseCase? = null
 ) : ViewModel() {
@@ -101,12 +102,6 @@ class DriverViewModel(
     fun initializeDriver(driverId: String) {
         if (currentDriverId == driverId && tasksJob != null) return
         currentDriverId = driverId
-
-        // Query initial availability
-        val driver = localDriverDataSource.getDriverById(driverId)
-        if (driver != null) {
-            _uiState.update { it.copy(driverAvailability = driver.availability) }
-        }
 
         loadDriverDashboard(driverId)
         observeDriverTasks(driverId)
@@ -242,7 +237,9 @@ class DriverViewModel(
     private fun observeDriverLocation(driverId: String) {
         locationJob?.cancel()
         locationJob = viewModelScope.launch {
-            getDriverLocationUseCase(driverId).collect { loc ->
+            getDriverLocationUseCase(driverId).catch { error ->
+                _uiState.update { it.copy(errorMessage = error.message ?: "Unable to load driver location. Check the backend connection.") }
+            }.collect { loc ->
                 _uiState.update { it.copy(activeDriverLocation = loc) }
             }
         }
@@ -251,7 +248,9 @@ class DriverViewModel(
     private fun observeDriverHistory(driverId: String, filter: HistoryFilter) {
         historyJob?.cancel()
         historyJob = viewModelScope.launch {
-            getDriverCollectionHistoryUseCase(driverId, filter).collect { list ->
+            getDriverCollectionHistoryUseCase(driverId, filter).catch { error ->
+                _uiState.update { it.copy(isLoading = false, errorMessage = error.message ?: "Unable to load collection history. Check the backend connection.") }
+            }.collect { list ->
                 _uiState.update { it.copy(historyComplaints = list, selectedHistoryFilter = filter) }
             }
         }
@@ -362,7 +361,7 @@ class DriverViewModel(
                 )
                 when (uploadResult) {
                     is Resource.Success -> {
-                        beforeUri = uploadResult.data?.url ?: beforeUri
+                        beforeUri = uploadResult.data?.url
                         _uiState.update { it.copy(draftBeforeImageUri = beforeUri) }
                     }
                     is Resource.Error -> {
@@ -380,6 +379,11 @@ class DriverViewModel(
                 }
             }
 
+            if (!beforeUri.isNullOrBlank() && !beforeUri.startsWith("https://")) {
+                _uiState.update { it.copy(isLoading = false, isUploadingMedia = false, uploadProgressMessage = null,
+                    errorMessage = "Before-photo must upload successfully before starting pickup. A local preview is not stored evidence.") }
+                return@launch
+            }
             _uiState.update { it.copy(isUploadingMedia = false, uploadProgressMessage = "Starting collection...") }
 
             val result = startCollectionUseCase(
@@ -441,50 +445,25 @@ class DriverViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             var beforeUri = _uiState.value.draftBeforeImageUri
 
-            // 1. Upload before photo if local URI
-            if (context != null && mediaRepository != null && !beforeUri.isNullOrBlank() && !beforeUri.startsWith("http")) {
-                _uiState.update { it.copy(isUploadingMedia = true, uploadProgressMessage = "Uploading before-photo...") }
-                val beforeUpload = mediaRepository.uploadMedia(
-                    context = context,
-                    uri = Uri.parse(beforeUri),
-                    folder = "before-cleaning",
-                    complaintId = complaintId
-                )
-                if (beforeUpload is Resource.Success) {
-                    beforeUri = beforeUpload.data?.url ?: beforeUri
-                    _uiState.update { it.copy(draftBeforeImageUri = beforeUri) }
+            val photos = com.garbage.management.domain.usecase.UploadCollectionPhotos.upload(
+                before = beforeUri, after = afterUri,
+                uploader = { folder, uri ->
+                    _uiState.update { it.copy(isUploadingMedia = true,
+                        uploadProgressMessage = if (folder == "before-cleaning") "Uploading before-photo..." else "Uploading after-photo...") }
+                    if (context == null || mediaRepository == null) Resource.Error("Photo upload service is unavailable. Reopen the task and retry.")
+                    else mediaRepository.uploadMedia(context, Uri.parse(uri), folder, complaintId)
+                },
+                onStored = { folder, url ->
+                    _uiState.update { if (folder == "before-cleaning") it.copy(draftBeforeImageUri = url) else it.copy(draftAfterImageUri = url) }
                 }
+            )
+            if (photos !is Resource.Success || photos.data == null) {
+                _uiState.update { it.copy(isLoading = false, isUploadingMedia = false, uploadProgressMessage = null,
+                    errorMessage = photos.message ?: "Photo uploads did not finish. Pickup is still in progress.") }
+                return@launch
             }
-
-            // 2. Upload mandatory after photo to Cloudinary if local URI
-            if (context != null && mediaRepository != null && !afterUri.startsWith("http")) {
-                _uiState.update { it.copy(isUploadingMedia = true, uploadProgressMessage = "Uploading after-photo to cloud...") }
-                val uploadResult = mediaRepository.uploadMedia(
-                    context = context,
-                    uri = Uri.parse(afterUri),
-                    folder = "after-cleaning",
-                    complaintId = complaintId
-                )
-                when (uploadResult) {
-                    is Resource.Success -> {
-                        afterUri = uploadResult.data?.url ?: afterUri
-                        _uiState.update { it.copy(draftAfterImageUri = afterUri) }
-                    }
-                    is Resource.Error -> {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                isUploadingMedia = false,
-                                uploadProgressMessage = null,
-                                errorMessage = "Failed to upload after-cleaning photo: ${uploadResult.message}. Completion requires cloud photo evidence."
-                            )
-                        }
-                        return@launch
-                    }
-                    is Resource.Loading -> Unit
-                }
-            }
-
+            beforeUri = photos.data.before
+            afterUri = photos.data.after
             _uiState.update { it.copy(isUploadingMedia = false, uploadProgressMessage = "Completing collection...") }
 
             val result = completeCollectionUseCase(
@@ -502,13 +481,13 @@ class DriverViewModel(
                             isLoading = false,
                             isUploadingMedia = false,
                             uploadProgressMessage = null,
-                            driverAvailability = DriverAvailability.AVAILABLE,
                             currentComplaintDetail = result.data,
                             userFeedbackMessage = "Collection successfully completed!"
                         )
                     }
-                    // Refresh history
+                    // Reload authoritative availability after transactional completion.
                     currentDriverId?.let { id ->
+                        loadDriverDashboard(id)
                         observeDriverTasks(id)
                         observeDriverHistory(id, _uiState.value.selectedHistoryFilter)
                     }
@@ -529,11 +508,11 @@ class DriverViewModel(
         }
     }
 
-    fun updateLocation(driverId: String, latitude: Double, longitude: Double) {
+    fun updateLocation(driverId: String, latitude: Double, longitude: Double, capturedAt: Long = System.currentTimeMillis()) {
         viewModelScope.launch {
             _uiState.update { it.copy(isUpdatingLocation = true, errorMessage = null) }
             try {
-                updateDriverLocationUseCase(driverId, latitude, longitude)
+                updateDriverLocationUseCase(driverId, latitude, longitude, capturedAt)
                 _uiState.update {
                     it.copy(
                         isUpdatingLocation = false,
@@ -552,12 +531,13 @@ class DriverViewModel(
     }
 
     fun updateAvailability(driverId: String, availability: DriverAvailability) {
-        localDriverDataSource.setDriverAvailability(driverId, availability)
-        _uiState.update {
-            it.copy(
-                driverAvailability = availability,
-                userFeedbackMessage = "Availability set to ${availability.displayName}."
-            )
+        viewModelScope.launch {
+            val result = remoteDriverDataSource?.updateAvailability(availability.name)
+            if (result is Resource.Success) {
+                _uiState.update { it.copy(driverAvailability = availability, userFeedbackMessage = "Availability updated.") }
+            } else {
+                _uiState.update { it.copy(errorMessage = result?.message ?: "Availability service unavailable.") }
+            }
         }
     }
 
@@ -581,6 +561,7 @@ class DriverViewModelFactory(
                 getDriverLocationUseCase = appContainer.getDriverLocationUseCase,
                 getComplaintByIdUseCase = appContainer.getComplaintByIdUseCase,
                 localDriverDataSource = appContainer.localDriverDataSource,
+                remoteDriverDataSource = appContainer.remoteDriverDataSource,
                 mediaRepository = appContainer.mediaRepository,
                 getDriverDashboardUseCase = appContainer.getDriverDashboardUseCase
             ) as T

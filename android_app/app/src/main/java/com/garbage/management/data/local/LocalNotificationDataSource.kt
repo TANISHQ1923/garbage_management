@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.update
  * In-memory thread-safe local data source for notifications.
  * Preloaded with realistic initial notifications for development and demo accounts.
  */
-class LocalNotificationDataSource {
+class LocalNotificationDataSource(private val demoMode: Boolean = false) {
 
     private val notificationsFlow = MutableStateFlow<List<AppNotification>>(
-        listOf(
+        if (!demoMode) emptyList() else listOf(
             AppNotification(
                 id = "NOTIF-2026-0005",
                 userId = "DRV-882",

@@ -24,8 +24,7 @@ let lastLoadedTime = 0;
 const isSyntheticMode = () => {
   return (
     env.USE_SYNTHETIC_DATA === true ||
-    process.env.USE_SYNTHETIC_DATA === 'true' ||
-    !getDBStatus().isConnected
+    process.env.USE_SYNTHETIC_DATA === 'true'
   );
 };
 

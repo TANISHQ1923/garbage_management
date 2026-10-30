@@ -1,19 +1,17 @@
 package com.garbage.management.domain.usecase
 
-import com.garbage.management.data.local.LocalDriverDataSource
+import com.garbage.management.data.remote.RemoteOfficerDataSource
 import com.garbage.management.domain.model.GarbageDriver
+import com.garbage.management.utils.Resource
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 
-/**
- * Use case to query active waste collection drivers for vehicle assignment.
- */
-class GetAvailableDriversUseCase(
-    private val driverDataSource: LocalDriverDataSource
-) {
-    operator fun invoke(onlyAvailable: Boolean = false): Flow<List<GarbageDriver>> {
-        return driverDataSource.getAllDrivers().map { list ->
-            if (onlyAvailable) list.filter { it.isAvailable } else list
+class GetAvailableDriversUseCase(private val remoteDataSource: RemoteOfficerDataSource) {
+    operator fun invoke(onlyAvailable: Boolean = false): Flow<List<GarbageDriver>> = flow {
+        when (val result = remoteDataSource.getDrivers()) {
+            is Resource.Success -> emit((result.data ?: emptyList()).filter { !onlyAvailable || it.isAvailable })
+            is Resource.Error -> throw IllegalStateException(result.message ?: "Unable to load drivers.")
+            is Resource.Loading -> Unit
         }
     }
 }

@@ -10,7 +10,8 @@ const { getDBStatus } = require('../config/db');
  * Helper to resolve driverId from authenticated user
  */
 const getDriverId = (user) => {
-  return user.driverId || user.id || user._id.toString();
+  if (!user.driverId) throw Object.assign(new Error('Driver identity is not provisioned. Contact your officer.'), { statusCode: 409 });
+  return user.driverId;
 };
 
 /**
@@ -119,11 +120,11 @@ const getTaskById = async (req, res, next) => {
  */
 const startCollection = async (req, res, next) => {
   try {
+    let beforeCleaningImagePublicId = null, afterCleaningImagePublicId = null;
     const { id } = req.params;
     const {
       beforeCleaningImageUrl,
       beforeCleaningUri,
-      beforeCleaningImagePublicId
     } = req.body;
     const driverId = getDriverId(req.user);
 
@@ -162,6 +163,10 @@ const startCollection = async (req, res, next) => {
     }
 
     const beforeImage = beforeCleaningImageUrl || beforeCleaningUri;
+    if (beforeImage) {
+      const stored = await require('../services/evidenceService').requireStoredEvidence(complaint, req.user, beforeImage, 'before-cleaning');
+      beforeCleaningImagePublicId = stored.publicId;
+    }
     const oldBeforePublicId = complaint.beforeCleaningImagePublicId;
 
     if (beforeImage) {
@@ -171,6 +176,7 @@ const startCollection = async (req, res, next) => {
       complaint.beforeCleaningImagePublicId = beforeCleaningImagePublicId;
     }
 
+    const expectedStatus = complaint.status;
     const now = Date.now();
     complaint.status = 'PICKUP_IN_PROGRESS';
     complaint.statusHistory.push({
@@ -182,7 +188,7 @@ const startCollection = async (req, res, next) => {
     });
 
     if (typeof complaint.save === 'function') {
-      await complaint.save();
+      await require('../services/taskTransitionService').commitTransition(complaint, expectedStatus, driverId);
     }
     if (syntheticDataService.isSyntheticMode()) {
       syntheticDataService.updateSyntheticComplaint(complaint.complaintId || complaint.id, complaint);
@@ -194,15 +200,9 @@ const startCollection = async (req, res, next) => {
       deleteAsset(oldBeforePublicId, 'image').catch(() => {});
     }
 
-    // Mark driver availability as BUSY
-    if (getDBStatus().isConnected || Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
-      try {
-        await Driver.findOneAndUpdate({ driverId }, { availability: 'BUSY' });
-      } catch (_) {}
-    }
 
     // Emit notification to citizen
-    await createNotification({
+    if (complaint.citizenId) await createNotification({
       userId: complaint.citizenId,
       type: 'PICKUP_STARTED',
       title: 'Garbage Collection Started',
@@ -226,14 +226,13 @@ const startCollection = async (req, res, next) => {
  */
 const completeCollection = async (req, res, next) => {
   try {
+    let beforeCleaningImagePublicId = null, afterCleaningImagePublicId = null;
     const { id } = req.params;
     const {
       afterCleaningImageUrl,
       afterCleaningUri,
-      afterCleaningImagePublicId,
       beforeCleaningImageUrl,
       beforeCleaningUri,
-      beforeCleaningImagePublicId
     } = req.body;
 
     const finalAfterImage = afterCleaningImageUrl || afterCleaningUri;
@@ -282,6 +281,12 @@ const completeCollection = async (req, res, next) => {
       });
     }
 
+    const afterStored = await require('../services/evidenceService').requireStoredEvidence(complaint, req.user, finalAfterImage, 'after-cleaning');
+    const beforeImageForValidation = beforeCleaningImageUrl || beforeCleaningUri;
+    const beforeStored = beforeImageForValidation
+      ? await require('../services/evidenceService').requireStoredEvidence(complaint, req.user, beforeImageForValidation, 'before-cleaning') : null;
+    afterCleaningImagePublicId = afterStored.publicId;
+    if (beforeStored) beforeCleaningImagePublicId = beforeStored.publicId;
     const oldBeforePublicId = complaint.beforeCleaningImagePublicId;
     const oldAfterPublicId = complaint.afterCleaningImagePublicId;
 
@@ -298,6 +303,7 @@ const completeCollection = async (req, res, next) => {
       complaint.afterCleaningImagePublicId = afterCleaningImagePublicId;
     }
 
+    const expectedStatus = complaint.status;
     const now = Date.now();
     complaint.status = 'CLEANED';
     complaint.statusHistory.push({
@@ -309,11 +315,12 @@ const completeCollection = async (req, res, next) => {
     });
 
     if (typeof complaint.save === 'function') {
-      await complaint.save();
+      await require('../services/taskTransitionService').commitTransition(complaint, expectedStatus, driverId);
     }
     if (syntheticDataService.isSyntheticMode()) {
       syntheticDataService.updateSyntheticComplaint(complaint.complaintId || complaint.id, complaint);
-      syntheticDataService.updateSyntheticDriverAvailability(driverId, 'AVAILABLE');
+      const hasOther = syntheticDataService.getSyntheticComplaints().some(c => c.assignedDriverId === driverId && ['ASSIGNED', 'PICKUP_IN_PROGRESS'].includes(c.status));
+      syntheticDataService.updateSyntheticDriverAvailability(driverId, hasOther ? 'BUSY' : 'AVAILABLE');
     }
 
     // Safely delete replaced assets
@@ -324,15 +331,9 @@ const completeCollection = async (req, res, next) => {
       deleteAsset(oldAfterPublicId, 'image').catch(() => {});
     }
 
-    // Reset driver availability to AVAILABLE
-    if (getDBStatus().isConnected || Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
-      try {
-        await Driver.findOneAndUpdate({ driverId }, { availability: 'AVAILABLE' });
-      } catch (_) {}
-    }
 
     // Emit notification to citizen
-    await createNotification({
+    if (complaint.citizenId) await createNotification({
       userId: complaint.citizenId,
       type: 'CLEANUP_COMPLETED',
       title: 'Garbage Cleanup Completed',
@@ -356,14 +357,13 @@ const completeCollection = async (req, res, next) => {
  */
 const updateEvidence = async (req, res, next) => {
   try {
+    let beforeCleaningImagePublicId = null, afterCleaningImagePublicId = null;
     const { id } = req.params;
     const {
       beforeCleaningImageUrl,
       beforeCleaningUri,
-      beforeCleaningImagePublicId,
       afterCleaningImageUrl,
       afterCleaningUri,
-      afterCleaningImagePublicId
     } = req.body;
 
     const driverId = getDriverId(req.user);
@@ -387,6 +387,15 @@ const updateEvidence = async (req, res, next) => {
     }
 
     const beforeImg = beforeCleaningImageUrl || beforeCleaningUri;
+    if (beforeImg) {
+      const stored = await require('../services/evidenceService').requireStoredEvidence(complaint, req.user, beforeImg, 'before-cleaning');
+      beforeCleaningImagePublicId = stored.publicId;
+    }
+    const afterToValidate = afterCleaningImageUrl || afterCleaningUri;
+    if (afterToValidate) {
+      const stored = await require('../services/evidenceService').requireStoredEvidence(complaint, req.user, afterToValidate, 'after-cleaning');
+      afterCleaningImagePublicId = stored.publicId;
+    }
     const afterImg = afterCleaningImageUrl || afterCleaningUri;
 
     const oldBeforePublicId = complaint.beforeCleaningImagePublicId;
@@ -424,9 +433,9 @@ const updateEvidence = async (req, res, next) => {
  */
 const updateLocation = async (req, res, next) => {
   try {
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, capturedAt } = req.body;
 
-    if (latitude === undefined || longitude === undefined) {
+    if (!require('../services/dispatchService').isValidCoordinate(latitude, longitude)) {
       return res.status(400).json({
         success: false,
         message: 'Latitude and longitude coordinates are required.'
@@ -435,6 +444,9 @@ const updateLocation = async (req, res, next) => {
 
     const driverId = getDriverId(req.user);
     const now = Date.now();
+    if (!Number.isFinite(capturedAt) || capturedAt > now || now - capturedAt > require('../config/env').DRIVER_LOCATION_MAX_AGE_MS) {
+      return res.status(400).json({ success: false, message: 'A recent device location capture time is required. Capture GPS again.' });
+    }
 
     if (syntheticDataService.isSyntheticMode() && !Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
       const synDriver = syntheticDataService.getSyntheticDrivers().find((d) => d.driverId === driverId);
@@ -442,7 +454,8 @@ const updateLocation = async (req, res, next) => {
         synDriver.currentLocation = {
           latitude: Number(latitude),
           longitude: Number(longitude),
-          timestamp: now
+          timestamp: capturedAt,
+          source: 'DEVICE'
         };
         return res.status(200).json({
           success: true,
@@ -451,7 +464,8 @@ const updateLocation = async (req, res, next) => {
             driverId,
             latitude: synDriver.currentLocation.latitude,
             longitude: synDriver.currentLocation.longitude,
-            timestamp: now
+            timestamp: capturedAt,
+            source: 'DEVICE'
           }
         });
       }
@@ -463,11 +477,16 @@ const updateLocation = async (req, res, next) => {
         currentLocation: {
           latitude: Number(latitude),
           longitude: Number(longitude),
-          timestamp: now
+          timestamp: capturedAt,
+          source: 'DEVICE'
         }
       },
-      { new: true, upsert: true }
+      { new: true, runValidators: true }
     );
+
+    if (!driver) return res.status(409).json({ success: false, message: 'Driver identity is not provisioned.' });
+
+    await require('../services/dispatchService').wakePendingSensorPickups();
 
     return res.status(200).json({
       success: true,
@@ -510,15 +529,7 @@ const getLocation = async (req, res, next) => {
     const driver = await Driver.findOne({ driverId });
 
     if (!driver || !driver.currentLocation) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          driverId,
-          latitude: 28.6139,
-          longitude: 77.2090,
-          timestamp: Date.now()
-        }
-      });
+      return res.status(404).json({ success: false, message: 'No measured driver location available.' });
     }
 
     return res.status(200).json({
@@ -570,6 +581,24 @@ const getHistory = async (req, res, next) => {
   }
 };
 
+const updateAvailability = async (req, res, next) => {
+  try {
+    const { availability } = req.body;
+    if (!['AVAILABLE', 'OFFLINE'].includes(availability)) return res.status(400).json({ success: false, message: 'Choose AVAILABLE or OFFLINE. BUSY is managed by assignment.' });
+    const driverId = getDriverId(req.user);
+    const { withTransaction } = require('../services/transactionService');
+    const { ACTIVE_STATUSES } = require('../services/dispatchService');
+    await withTransaction(async session => {
+      const active = await Complaint.exists({ assignedDriverId: driverId, status: { $in: ACTIVE_STATUSES } }).session(session);
+      if (active) throw Object.assign(new Error('Finish the active pickup before changing availability.'), { statusCode: 409 });
+      const d = await Driver.findOneAndUpdate({ driverId }, { $set: { availability } }, { session, new: true });
+      if (!d) throw Object.assign(new Error('Driver identity is not provisioned.'), { statusCode: 409 });
+    });
+    if (availability === 'AVAILABLE') await require('../services/dispatchService').wakePendingSensorPickups();
+    return res.json({ success: true, data: { availability } });
+  } catch (error) { next(error); }
+};
+
 module.exports = {
   getMyTasks,
   getTaskById,
@@ -578,5 +607,6 @@ module.exports = {
   updateEvidence,
   updateLocation,
   getLocation,
-  getHistory
+  getHistory,
+  updateAvailability
 };

@@ -447,70 +447,52 @@ fun StatusTimelineView(
 object LocationHelper {
 
     @SuppressLint("MissingPermission")
-    suspend fun getCurrentLocation(context: Context): Location? = suspendCancellableCoroutine { continuation ->
-        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        if (locationManager == null) {
-            continuation.resume(null)
-            return@suspendCancellableCoroutine
-        }
-
-        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-
-        if (!isGpsEnabled && !isNetworkEnabled) {
-            continuation.resume(null)
-            return@suspendCancellableCoroutine
-        }
-
-        // 1. Try last known location first
-        var bestLocation: Location? = null
-        if (isGpsEnabled) {
-            bestLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-        }
-        if (bestLocation == null && isNetworkEnabled) {
-            bestLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-        }
-
-        if (bestLocation != null) {
-            continuation.resume(bestLocation)
-            return@suspendCancellableCoroutine
-        }
-
-        // 2. Modern Android API 30+ getCurrentLocation or single update fallback
-        val provider = if (isGpsEnabled) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val cancellationSignal = android.os.CancellationSignal()
-            continuation.invokeOnCancellation { cancellationSignal.cancel() }
-            val executor = ContextCompat.getMainExecutor(context)
-            locationManager.getCurrentLocation(
-                provider,
-                cancellationSignal,
-                executor
-            ) { location ->
-                if (continuation.isActive) {
-                    continuation.resume(location)
+    suspend fun getCurrentLocation(context: Context): Location? = kotlinx.coroutines.withTimeoutOrNull(15_000L) {
+        suspendCancellableCoroutine { continuation ->
+            val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+            if (manager == null) { continuation.resume(null); return@suspendCancellableCoroutine }
+            val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+                .filter { runCatching { manager.isProviderEnabled(it) }.getOrDefault(false) }
+            if (providers.isEmpty()) { continuation.resume(null); return@suspendCancellableCoroutine }
+            fun fresh(location: Location): Boolean = com.garbage.management.utils.LocationFreshness.isFresh(
+                location.elapsedRealtimeNanos, android.os.SystemClock.elapsedRealtimeNanos())
+            // A stale GPS cache must not hide a recent real network-provider location.
+            val cached = providers.mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
+                .filter { fresh(it) }.maxByOrNull { it.elapsedRealtimeNanos }
+            if (cached != null) { continuation.resume(cached); return@suspendCancellableCoroutine }
+            val signals = mutableListOf<android.os.CancellationSignal>()
+            val listeners = mutableListOf<LocationListener>()
+            var remaining = providers.size
+            var finished = false
+            fun cleanup() {
+                signals.forEach { it.cancel() }
+                listeners.forEach { runCatching { manager.removeUpdates(it) } }
+            }
+            fun complete(location: Location?) {
+                if (finished || !continuation.isActive) return
+                if (location != null && fresh(location)) {
+                    finished = true; cleanup(); continuation.resume(location)
+                } else {
+                    remaining--
+                    if (remaining == 0) { finished = true; cleanup(); continuation.resume(null) }
                 }
             }
-        } else {
-            val listener = LocationListener { location ->
-                @Suppress("DEPRECATION")
-                locationManager.removeUpdates(this as LocationListener)
-                if (continuation.isActive) {
-                    continuation.resume(location)
-                }
-            }
-
-            try {
-                @Suppress("DEPRECATION")
-                locationManager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
-                continuation.invokeOnCancellation {
-                    @Suppress("DEPRECATION")
-                    locationManager.removeUpdates(listener)
-                }
-            } catch (e: Exception) {
-                if (continuation.isActive) {
-                    continuation.resume(null)
-                }
+            continuation.invokeOnCancellation { finished = true; cleanup() }
+            for (provider in providers) {
+                if (finished) break
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        val signal = android.os.CancellationSignal(); signals.add(signal)
+                        manager.getCurrentLocation(provider, signal, ContextCompat.getMainExecutor(context)) { complete(it) }
+                    } else {
+                        val listener = object : LocationListener {
+                            override fun onLocationChanged(location: Location) { complete(location) }
+                        }
+                        listeners.add(listener)
+                        @Suppress("DEPRECATION")
+                        manager.requestSingleUpdate(provider, listener, Looper.getMainLooper())
+                    }
+                } catch (_: Exception) { complete(null) }
             }
         }
     }

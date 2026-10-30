@@ -9,13 +9,13 @@ import com.garbage.management.domain.repository.DriverLocationRepository
 class UpdateDriverLocationUseCase(
     private val repository: DriverLocationRepository
 ) {
-    suspend operator fun invoke(driverId: String, latitude: Double, longitude: Double) {
+    suspend operator fun invoke(driverId: String, latitude: Double, longitude: Double, capturedAt: Long = System.currentTimeMillis()) {
         repository.updateDriverLocation(
             DriverLocation(
                 driverId = driverId,
                 latitude = latitude,
                 longitude = longitude,
-                timestamp = System.currentTimeMillis()
+                timestamp = capturedAt
             )
         )
     }

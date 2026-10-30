@@ -2,9 +2,10 @@ const mongoose = require('mongoose');
 
 const driverLocationSchema = new mongoose.Schema(
   {
-    latitude: { type: Number, default: 28.6139 },
-    longitude: { type: Number, default: 77.2090 },
-    timestamp: { type: Number, default: () => Date.now() }
+    latitude: { type: Number, default: null },
+    longitude: { type: Number, default: null },
+    timestamp: { type: Number, default: null },
+    source: { type: String, enum: ['DEVICE'], default: undefined }
   },
   { _id: false }
 );
@@ -51,11 +52,7 @@ const driverSchema = new mongoose.Schema(
     },
     currentLocation: {
       type: driverLocationSchema,
-      default: () => ({
-        latitude: 28.6139,
-        longitude: 77.2090,
-        timestamp: Date.now()
-      })
+      default: null
     }
   },
   {

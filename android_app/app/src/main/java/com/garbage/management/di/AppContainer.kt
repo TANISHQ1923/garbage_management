@@ -143,7 +143,7 @@ class AppContainer(private val context: Context) {
             remoteDataSource = remoteAuthDataSource,
             sessionManager = sessionManager,
             apiService = apiService,
-            mockDataSource = mockAuthDataSource
+            mockDataSource = null
         )
     }
 
@@ -251,7 +251,7 @@ class AppContainer(private val context: Context) {
     }
 
     val getAvailableDriversUseCase: GetAvailableDriversUseCase by lazy {
-        GetAvailableDriversUseCase(driverDataSource = localDriverDataSource)
+        GetAvailableDriversUseCase(remoteDataSource = remoteOfficerDataSource)
     }
 
     val assignDriverUseCase: AssignDriverUseCase by lazy {

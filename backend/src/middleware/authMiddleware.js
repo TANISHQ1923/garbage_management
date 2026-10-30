@@ -31,7 +31,7 @@ const authenticate = async (req, res, next) => {
     try {
       decoded = jwt.verify(token, env.JWT_SECRET);
     } catch (err) {
-      if (token.startsWith('mock-token-')) {
+      if (syntheticDataService.isSyntheticMode() && token.startsWith('mock-token-')) {
         const mockId = token.replace('mock-token-', '');
         const demoUser = findDemoUserById(mockId);
         if (demoUser) {
@@ -58,13 +58,13 @@ const authenticate = async (req, res, next) => {
     if (isConnected || isMock) {
       try {
         user = await User.findById(decoded.id);
-      } catch (_) {
-        user = null;
+      } catch (error) {
+        return res.status(503).json({ success: false, message: 'Authentication database unavailable. Please retry later.' });
       }
     }
 
     // Fallback to demo users when DB is offline or user not found in DB
-    if (!user) {
+    if (!user && syntheticDataService.isSyntheticMode()) {
       const demoUser = findDemoUserById(decoded.id || decoded._id);
       if (demoUser) {
         user = {
@@ -79,7 +79,7 @@ const authenticate = async (req, res, next) => {
     }
 
     // Fallback to synthetic users when in synthetic mode or not found in DB
-    if (!user) {
+    if (!user && syntheticDataService.isSyntheticMode()) {
       const syntheticUser = syntheticDataService.getSyntheticUserById(decoded.id || decoded._id);
       if (syntheticUser) {
         user = {
@@ -106,8 +106,7 @@ const authenticate = async (req, res, next) => {
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: 'Authentication error',
-      error: error.message
+      message: 'Authentication service unavailable. Please retry later.'
     });
   }
 };

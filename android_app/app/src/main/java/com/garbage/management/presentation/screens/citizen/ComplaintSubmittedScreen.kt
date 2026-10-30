@@ -149,7 +149,7 @@ fun ComplaintSubmittedScreen(
                             )
                         } else {
                             Text(
-                                text = "Queued in priority queue. Dispatches as soon as a driver is nearby.",
+                                text = complaint.dispatchResult?.message ?: "Report saved. Awaiting officer assignment to an eligible driver.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF8D6E63)
                             )

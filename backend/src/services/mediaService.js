@@ -97,25 +97,8 @@ const uploadMedia = async (file, options = {}) => {
   const { resourceType } = validateMedia(file);
 
   if (!isCloudinaryConfigured()) {
-    const isPlaceholder =
-      env.CLOUDINARY_CLOUD_NAME === 'your_cloudinary_cloud_name' ||
-      env.CLOUDINARY_API_KEY === 'your_cloudinary_api_key' ||
-      env.CLOUDINARY_API_SECRET === 'your_cloudinary_api_secret';
-
-    if (isPlaceholder) {
-      const crypto = require('crypto');
-      const mockId = `demo/complaint_${crypto.randomBytes(4).toString('hex')}`;
-      return {
-        success: true,
-        url: resourceType === 'video'
-          ? 'https://res.cloudinary.com/demo/video/upload/v1/sample-video.mp4'
-          : 'https://res.cloudinary.com/demo/image/upload/v1/cld-sample.jpg',
-        publicId: mockId,
-        resourceType: resourceType || 'image'
-      };
-    }
     const error = new Error(
-      'Cloudinary media storage is not configured. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in backend/.env'
+      'Photo storage is not configured: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET are required. For this local pilot run Local-Pilot.ps1 -Action ConfigureMedia, then Restart. Selecting a photo only creates a preview.'
     );
     error.statusCode = 503;
     throw error;
@@ -138,13 +121,21 @@ const uploadMedia = async (file, options = {}) => {
 
   if (options.complaintId) {
     const sanitizedId = options.complaintId.replace(/[^a-zA-Z0-9_-]/g, '');
-    uploadOptions.public_id = `${sanitizedId}_${Date.now()}`;
+    uploadOptions.public_id = `${sanitizedId}_${require('crypto').randomUUID()}`;
   }
 
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(uploadOptions, (error, result) => {
       if (error) {
-        return reject(new Error(`Cloudinary upload failed: ${error.message}`));
+        const status = Number(error.http_code) || null;
+        const failure = new Error(status === 401 || status === 403
+          ? `Cloudinary rejected upload authentication/permissions (HTTP ${status}). Check the approved test-storage settings.`
+          : 'Cloudinary photo upload failed. Check test-storage connectivity and retry.');
+        failure.statusCode = 502;
+        return reject(failure);
+      }
+      if (!result?.secure_url?.startsWith('https://') || !result.public_id || result.resource_type !== resourceType) {
+        return reject(Object.assign(new Error('Photo provider returned an invalid stored-media reference. No upload success was recorded.'), { statusCode: 502 }));
       }
       resolve({
         success: true,
@@ -175,8 +166,8 @@ const deleteAsset = async (publicId, resourceType = 'image') => {
     });
   } catch (err) {
     // Non-blocking cleanup error log
-    console.warn(`[Cloudinary] Asset deletion warning for '${publicId}':`, err.message);
-    return { result: 'error', error: err.message };
+    console.warn('[Cloudinary] Replaced-media cleanup failed; check test storage connectivity.');
+    return { result: 'error', error: 'Media cleanup failed' };
   }
 };
 

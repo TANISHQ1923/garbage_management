@@ -70,8 +70,7 @@ const errorHandler = (err, req, res, next) => {
 
   res.status(statusCode).json({
     success: false,
-    message: err.message || 'Internal Server Error',
-    ...(env.NODE_ENV === 'development' ? { stack: err.stack } : {})
+    message: statusCode >= 500 && statusCode !== 503 ? 'Service operation failed. Please retry later.' : (err.message || 'Internal Server Error')
   });
 };
 

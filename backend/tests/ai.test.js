@@ -1,3 +1,4 @@
+jest.mock('../src/config/db', () => ({ getDBStatus: jest.fn(() => ({ isConnected: true, state: 'connected' })) }));
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../src/app');

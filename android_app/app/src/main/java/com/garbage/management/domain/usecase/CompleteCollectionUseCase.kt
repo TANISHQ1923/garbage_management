@@ -54,9 +54,8 @@ class CompleteCollectionUseCase(
             beforeCleaningUri = beforeCleaningUri
         )
 
-        // 5. Restore driver availability to AVAILABLE and notify citizen
+        // Availability is authoritative on the backend; do not release capacity locally.
         if (completeResult is Resource.Success) {
-            driverDataSource.setDriverAvailability(driverId, DriverAvailability.AVAILABLE)
 
             notificationRepository.createNotification(
                 AppNotification(

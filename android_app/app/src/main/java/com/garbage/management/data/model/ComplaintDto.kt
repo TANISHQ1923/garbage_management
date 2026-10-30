@@ -11,6 +11,9 @@ import com.google.gson.annotations.SerializedName
  * Data transfer object representing a Garbage Complaint from the backend API.
  */
 data class ComplaintDto(
+    @SerializedName("source") val source: String? = null,
+    @SerializedName("binId") val binId: String? = null,
+    @SerializedName("sensorEmptyConfirmedAt") val sensorEmptyConfirmedAt: Long? = null,
     @SerializedName("id")
     val id: String? = null,
 
@@ -135,7 +138,10 @@ data class ComplaintDto(
         return GarbageComplaint(
             id = finalId,
             citizenId = citizenId ?: "",
-            citizenName = citizenName ?: "Citizen",
+            citizenName = citizenName ?: if (source == "SENSOR") "Smart bin" else "Citizen",
+            source = source ?: "CITIZEN",
+            binId = binId,
+            sensorEmptyConfirmedAt = sensorEmptyConfirmedAt,
             citizenPhone = citizenPhone,
             garbageType = mappedType,
             description = description,

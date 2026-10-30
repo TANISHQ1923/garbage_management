@@ -117,7 +117,12 @@ const createComplaint = async (req, res, next) => {
     complaint.priorityLevel = level;
 
     // Attempt automatic driver dispatch
-    const dispatchResult = await autoDispatchComplaint(complaint, { now });
+    let dispatchResult;
+    try { dispatchResult = await autoDispatchComplaint(complaint, { now }); }
+    catch (_) {
+      dispatchResult = { assigned: false, assignmentStatus: 'PENDING_DRIVER', reason: 'DISPATCH_UNAVAILABLE',
+        message: 'Complaint saved, but automatic assignment is unavailable. Officer action is required.' };
+    }
 
     // If dispatch did not assign a driver, notify citizen that complaint was received and awaiting assignment
     if (!dispatchResult.assigned) {
@@ -283,7 +288,7 @@ const requestEmergency = async (req, res, next) => {
 
     await complaint.save();
 
-    await createNotification({
+    await notificationService.createNotification({
       userId: complaint.citizenId,
       type: 'EMERGENCY_REQUEST_RECEIVED',
       title: 'Emergency Request Received',

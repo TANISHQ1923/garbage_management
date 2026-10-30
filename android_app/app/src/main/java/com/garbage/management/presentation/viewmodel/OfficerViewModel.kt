@@ -13,6 +13,7 @@ import com.garbage.management.domain.usecase.GetAvailableDriversUseCase
 import com.garbage.management.domain.usecase.GetComplaintByIdUseCase
 import com.garbage.management.domain.usecase.UpdateComplaintStatusUseCase
 import com.garbage.management.utils.Resource
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -80,6 +81,7 @@ data class OfficerMetrics(
 )
 
 data class OfficerDashboardUiState(
+    val bins: List<com.garbage.management.domain.model.SmartBinStatus> = emptyList(),
     val allComplaints: List<GarbageComplaint> = emptyList(),
     val metrics: OfficerMetrics = OfficerMetrics(),
     val priorityComplaints: List<GarbageComplaint> = emptyList(),
@@ -132,7 +134,10 @@ class OfficerViewModel(
     val detailState: StateFlow<OfficerComplaintDetailUiState> = _detailState.asStateFlow()
 
     val complaintsListState: StateFlow<OfficerComplaintsUiState> = combine(
-        getAllComplaintsUseCase(),
+        getAllComplaintsUseCase().catch { error ->
+            _dashboardState.update { it.copy(isLoading = false, error = error.message) }
+            emit(emptyList())
+        },
         _searchQuery,
         _selectedFilter,
         _selectedSort
@@ -245,6 +250,7 @@ class OfficerViewModel(
                             )
                             _dashboardState.update {
                                 it.copy(
+                                    bins = data.bins,
                                     allComplaints = data.allComplaints,
                                     metrics = metrics,
                                     priorityComplaints = data.priorityComplaints,
@@ -280,7 +286,9 @@ class OfficerViewModel(
 
     private fun observeAllComplaints() {
         viewModelScope.launch {
-            getAllComplaintsUseCase().collect { complaints ->
+            getAllComplaintsUseCase().catch { error ->
+                _dashboardState.update { it.copy(isLoading = false, error = error.message) }
+            }.collect { complaints ->
                 val metrics = OfficerMetrics(
                     total = complaints.size,
                     submitted = complaints.count { it.status == ComplaintStatus.SUBMITTED },
@@ -340,7 +348,9 @@ class OfficerViewModel(
 
     private fun loadAvailableDrivers() {
         viewModelScope.launch {
-            getAvailableDriversUseCase().collect { drivers ->
+            getAvailableDriversUseCase().catch { error ->
+                _detailState.update { it.copy(error = error.message) }
+            }.collect { drivers ->
                 _detailState.update { it.copy(availableDrivers = drivers) }
             }
         }

@@ -49,9 +49,9 @@ class DriverWorkflowTest {
 
     @Before
     fun setup() {
-        complaintDataSource = LocalComplaintDataSource()
+        complaintDataSource = LocalComplaintDataSource(demoMode = true)
         driverDataSource = LocalDriverDataSource()
-        notificationDataSource = LocalNotificationDataSource()
+        notificationDataSource = LocalNotificationDataSource(demoMode = true)
         locationDataSource = LocalDriverLocationDataSource()
 
         complaintRepository = ComplaintRepositoryImpl(complaintDataSource)
@@ -167,10 +167,10 @@ class DriverWorkflowTest {
         assertEquals(ComplaintStatus.CLEANED, completedComplaint?.status)
         assertEquals(afterUri, completedComplaint?.afterCleaningImageUri)
 
-        // Verify driver restored to AVAILABLE
+        // Completion does not invent AVAILABLE locally; the server dashboard owns capacity.
         val driver = driverDataSource.getDriverById(driverId)
-        assertEquals(DriverAvailability.AVAILABLE, driver?.availability)
-        assertTrue(driver?.isAvailable == true)
+        assertEquals(DriverAvailability.BUSY, driver?.availability)
+        assertTrue(driver?.isAvailable == false)
 
         // Verify citizen received CLEANUP_COMPLETED notification
         val notifications = notificationRepository.getNotifications(completedComplaint!!.citizenId).first()
