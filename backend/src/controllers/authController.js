@@ -123,7 +123,7 @@ const login = async (req, res, next) => {
           }
           return res.status(200).json({
             success: true,
-            message: 'Login successful (Synthetic Demo Mode)',
+            message: 'Login successful',
             data: {
               user: { ...cleanSynUser, token },
               token
@@ -132,27 +132,38 @@ const login = async (req, res, next) => {
         }
       }
 
-      const demoMatch = DEMO_USERS.find(
-        (u) => u.email.toLowerCase() === cleanEmail && u.password === password
+      const demoMatch = findDemoUserByEmail(cleanEmail) || DEMO_USERS.find(
+        (u) => u.email.toLowerCase() === cleanEmail
       );
       if (demoMatch) {
-        if (role && demoMatch.role !== role) {
-          return res.status(401).json({
-            success: false,
-            message: `Role mismatch: This account is registered as ${demoMatch.role}.`
+        const isPassMatch = demoMatch.password === password ||
+          (demoMatch.passwordHash && (await bcrypt.compare(password, demoMatch.passwordHash)));
+        if (isPassMatch) {
+          if (role && demoMatch.role !== role) {
+            return res.status(401).json({
+              success: false,
+              message: `Role mismatch: This account is registered as ${demoMatch.role}.`
+            });
+          }
+          const token = generateToken(demoMatch);
+          const { password: _, passwordHash: __, ...cleanUser } = demoMatch;
+          return res.status(200).json({
+            success: true,
+            message: 'Login successful',
+            data: {
+              user: { ...cleanUser, token },
+              token
+            }
           });
         }
-        const token = generateToken(demoMatch);
-        const { password: _, ...cleanUser } = demoMatch;
-        return res.status(200).json({
-          success: true,
-          message: 'Login successful',
-          data: {
-            user: { ...cleanUser, token },
-            token
-          }
-        });
       }
+    }
+
+    if (!getDBStatus().isConnected) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.'
+      });
     }
 
     // Query user in MongoDB and explicitly select passwordHash

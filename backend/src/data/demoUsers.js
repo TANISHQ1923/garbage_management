@@ -134,6 +134,44 @@ const DEMO_USERS = [
     availability: 'OFFLINE',
     password: 'password123',
     passwordHash: '$2a$10$MfiXa0QhwFbJmitSVa9ghui2DmrhoW4nh.KNBmzd7CSGfl2BqJ3I.'
+  },
+  {
+    _id: '67b300000000000000000097',
+    id: '67b300000000000000000097',
+    email: 'citizen@phase1.local',
+    name: 'Phase 1 Citizen',
+    role: 'CITIZEN',
+    phone: '+91 9876543297',
+    address: 'Bibwewadi, Pune',
+    password: 'Sampada@1234',
+    passwordHash: '$2a$10$V0aqI43cvKaydgu77ZoQx.FJODszTUbJiFv27RD/8GVfcQ5/UsYJm'
+  },
+  {
+    _id: '67b300000000000000000099',
+    id: '67b300000000000000000099',
+    email: 'driver@phase1.local',
+    name: 'Phase 1 Driver',
+    role: 'GARBAGE_DRIVER',
+    phone: '+91 9876543299',
+    driverId: 'LOCAL-PILOT-Driver',
+    employeeId: 'LOCAL-PILOT-Driver',
+    vehicleNumber: 'MH-PILOT-001',
+    vehicleType: 'Heavy Compactor Truck',
+    availability: 'AVAILABLE',
+    password: 'Sampada@1234',
+    passwordHash: '$2a$10$V0aqI43cvKaydgu77ZoQx.FJODszTUbJiFv27RD/8GVfcQ5/UsYJm'
+  },
+  {
+    _id: '67b300000000000000000098',
+    id: '67b300000000000000000098',
+    email: 'officer@phase1.local',
+    name: 'Phase 1 Officer',
+    role: 'MUNICIPAL_OFFICER',
+    phone: '+91 9876543298',
+    employeeId: 'LOCAL-PILOT-Officer',
+    ward: 'Ward 19 - Bibwewadi',
+    password: 'Sampada@1234',
+    passwordHash: '$2a$10$V0aqI43cvKaydgu77ZoQx.FJODszTUbJiFv27RD/8GVfcQ5/UsYJm'
   }
 ];
 
@@ -153,7 +191,10 @@ const findDemoUserById = (id) => {
         (targetId === 'mock-officer-001' && u.email === 'officer@example.com') ||
         (targetId === 'mock-officer-002' && u.email === 'officer2@example.com') ||
         (targetId === 'mock-driver-001' && u.email === 'driver@example.com') ||
-        (targetId === 'mock-driver-002' && u.email === 'driver2@example.com')
+        (targetId === 'mock-driver-002' && u.email === 'driver2@example.com') ||
+        (targetId === 'LOCAL-PILOT-Driver' && u.email === 'driver@phase1.local') ||
+        (targetId === 'LOCAL-PILOT-Officer' && u.email === 'officer@phase1.local') ||
+        (targetId === 'LOCAL-PILOT-Citizen' && u.email === 'citizen@phase1.local')
     ) || null
   );
 };

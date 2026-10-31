@@ -2,44 +2,60 @@ package com.garbage.management.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Eco-Smart Theme Colors
-val GreenPrimaryLight = Color(0xFF1E7E34)
+// Professional Government Digital Service Palette
+// (Clean, authoritative Indian Public Service style — Swachh Bharat / National Portal aesthetic)
+
+// Primary: Deep Government Forest Green
+val GreenPrimaryLight = Color(0xFF137333)       // Clean, official deep green
 val GreenOnPrimaryLight = Color(0xFFFFFFFF)
-val GreenPrimaryContainerLight = Color(0xFFA7F3B8)
-val GreenOnPrimaryContainerLight = Color(0xFF002107)
+val GreenPrimaryContainerLight = Color(0xFFE6F4EA)  // Subtle muted tint
+val GreenOnPrimaryContainerLight = Color(0xFF0D5223)
 
-val TealSecondaryLight = Color(0xFF00796B)
+// Secondary: Official Charcoal / Slate Blue-Grey
+val TealSecondaryLight = Color(0xFF2C3E50)       // Muted slate charcoal
 val TealOnSecondaryLight = Color(0xFFFFFFFF)
-val TealSecondaryContainerLight = Color(0xFFB2DFDB)
-val TealOnSecondaryContainerLight = Color(0xFF00201B)
+val TealSecondaryContainerLight = Color(0xFFF1F5F9)
+val TealOnSecondaryContainerLight = Color(0xFF1E293B)
 
-val AmberTertiaryLight = Color(0xFFC07000)
+// Tertiary: Muted Government Amber
+val AmberTertiaryLight = Color(0xFFB45309)       // Muted warm amber
 val AmberOnTertiaryLight = Color(0xFFFFFFFF)
 
-val BackgroundLight = Color(0xFFF6FAF6)
-val OnBackgroundLight = Color(0xFF181D19)
-val SurfaceLight = Color(0xFFFFFFFF)
-val OnSurfaceLight = Color(0xFF181D19)
-val SurfaceVariantLight = Color(0xFFDDE5DC)
-val OnSurfaceVariantLight = Color(0xFF414942)
+// Surfaces & Backgrounds
+val BackgroundLight = Color(0xFFF8F9FA)          // Clean off-white / light neutral grey
+val OnBackgroundLight = Color(0xFF212529)        // Dark charcoal text
+val SurfaceLight = Color(0xFFFFFFFF)             // Pure crisp white card surface
+val OnSurfaceLight = Color(0xFF212529)           // Dark charcoal text
+val SurfaceVariantLight = Color(0xFFF1F3F5)      // Light neutral surface
+val OnSurfaceVariantLight = Color(0xFF495057)    // Muted secondary text
+val OutlineLight = Color(0xFFDEE2E6)             // Subtle clean border divider
+
+// Government Status Accents
+val GovSuccess = Color(0xFF2E7D32)
+val GovSuccessContainer = Color(0xFFEDF7ED)
+val GovWarning = Color(0xFFB45309)
+val GovWarningContainer = Color(0xFFFFFBEB)
+val GovError = Color(0xFFC62828)
+val GovErrorContainer = Color(0xFFFDF2F2)
 
 // Dark Theme Colors
-val GreenPrimaryDark = Color(0xFF8CE09D)
+val GreenPrimaryDark = Color(0xFF81C995)
 val GreenOnPrimaryDark = Color(0xFF003912)
-val GreenPrimaryContainerDark = Color(0xFF00531D)
-val GreenOnPrimaryContainerDark = Color(0xFFA7F3B8)
+val GreenPrimaryContainerDark = Color(0xFF0F5223)
+val GreenOnPrimaryContainerDark = Color(0xFFCEEAD6)
 
-val TealSecondaryDark = Color(0xFF80CBC4)
-val TealOnSecondaryDark = Color(0xFF003730)
-val TealSecondaryContainerDark = Color(0xFF004F46)
-val TealOnSecondaryContainerDark = Color(0xFFB2DFDB)
+val TealSecondaryDark = Color(0xFF90A4AE)
+val TealOnSecondaryDark = Color(0xFF1A2634)
+val TealSecondaryContainerDark = Color(0xFF263238)
+val TealOnSecondaryContainerDark = Color(0xFFECEFF1)
 
-val AmberTertiaryDark = Color(0xFFFFB868)
-val AmberOnTertiaryDark = Color(0xFF482900)
+val AmberTertiaryDark = Color(0xFFF59E0B)
+val AmberOnTertiaryDark = Color(0xFF451A03)
 
-val BackgroundDark = Color(0xFF101511)
-val OnBackgroundDark = Color(0xFFE0E4DE)
-val SurfaceDark = Color(0xFF181E19)
-val OnSurfaceDark = Color(0xFFE0E4DE)
-val SurfaceVariantDark = Color(0xFF414942)
-val OnSurfaceVariantDark = Color(0xFFC1C9C0)
+val BackgroundDark = Color(0xFF121417)
+val OnBackgroundDark = Color(0xFFE2E8F0)
+val SurfaceDark = Color(0xFF1A1D21)
+val OnSurfaceDark = Color(0xFFE2E8F0)
+val SurfaceVariantDark = Color(0xFF2D3238)
+val OnSurfaceVariantDark = Color(0xFF94A3B8)
+val OutlineDark = Color(0xFF3E444C)

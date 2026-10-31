@@ -74,6 +74,7 @@ import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.ComplaintStatusBadge
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
 import com.garbage.management.presentation.components.UriImageViewer
+import com.garbage.management.presentation.components.displayId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.AuthViewModel
@@ -196,12 +197,33 @@ fun DriverTaskDetailsScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (uiState.isLoadingDetail || complaint == null) {
+            if (uiState.isLoadingDetail && complaint == null) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else if (complaint == null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = uiState.errorMessage ?: "Task details could not be loaded.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = { driverViewModel.loadComplaintDetail(complaintId) }
+                    ) {
+                        Text("Retry")
+                    }
                 }
             } else {
                 Column(
@@ -242,7 +264,7 @@ fun DriverTaskDetailsScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
-                                        text = complaint.id,
+                                        text = complaint.displayId,
                                         style = MaterialTheme.typography.titleLarge.copy(
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary
@@ -606,7 +628,7 @@ fun DriverTaskDetailsScreen(
                         )
                     },
                     text = {
-                        Text("Start garbage collection for this assignment (${complaint.id})?")
+                        Text("Start garbage collection for this assignment (${complaint.displayId})?")
                     },
                     confirmButton = {
                         Button(

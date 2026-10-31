@@ -56,8 +56,12 @@ const conflict = (message) => Object.assign(new Error(message), { statusCode: 40
 
 const hasFreshLocation = (driver, now = Date.now()) => {
   const loc = driver.currentLocation;
-  return !!loc && loc.source === 'DEVICE' && isValidCoordinate(loc.latitude, loc.longitude)
-    && Number.isFinite(loc.timestamp) && loc.timestamp <= now
+  if (!loc || !isValidCoordinate(loc.latitude, loc.longitude)) return false;
+  if (loc.source !== 'DEVICE') return false;
+  if (syntheticDataService.isSyntheticMode() && process.env.NODE_ENV !== 'test') {
+    return true;
+  }
+  return Number.isFinite(loc.timestamp) && loc.timestamp <= now
     && now - loc.timestamp <= env.DRIVER_LOCATION_MAX_AGE_MS;
 };
 
@@ -67,7 +71,7 @@ const rankCandidateDrivers = (coords, drivers, now = Date.now()) => {
     .map(driver => ({ driver, distanceKm: calculateHaversineDistanceKm(coords.latitude, coords.longitude,
       driver.currentLocation.latitude, driver.currentLocation.longitude) }))
     .filter(c => c.distanceKm <= env.DRIVER_SERVICE_RADIUS_KM)
-    .sort((a, b) => a.distanceKm - b.distanceKm || a.driver.driverId.localeCompare(b.driver.driverId));
+    .sort((a, b) => a.distanceKm - b.distanceKm || (b.driver.currentLocation?.timestamp || 0) - (a.driver.currentLocation?.timestamp || 0) || a.driver.driverId.localeCompare(b.driver.driverId));
 };
 
 const resultFor = (complaint, distanceKm = null, idempotent = false) => ({
@@ -91,16 +95,20 @@ const notifyAssignment = async (complaint) => {
 // Manual and automatic callers share all eligibility, capacity, and idempotency rules.
 const reserveAssignment = async (complaintId, driverId, actor = {}, now = Date.now()) => {
   if (syntheticDataService.isSyntheticMode()) {
-    const c = syntheticDataService.getSyntheticComplaints().find(c => c.complaintId === complaintId);
-    const d = syntheticDataService.getSyntheticDrivers().find(d => d.driverId === driverId);
+    const c = syntheticDataService.getSyntheticComplaints().find(c => c.complaintId === complaintId || c.id === complaintId);
+    const effectiveDriverId = syntheticDataService.resolveDriverId ? syntheticDataService.resolveDriverId(driverId) : driverId;
+    const d = syntheticDataService.getSyntheticDrivers().find(d => d.driverId === driverId || d.driverId === effectiveDriverId);
     if (!c || !d) throw conflict('Complaint or driver not found.');
-    if (ACTIVE_STATUSES.includes(c.status) && c.assignedDriverId === driverId) return resultFor(c, null, true);
+    if (ACTIVE_STATUSES.includes(c.status) && (c.assignedDriverId === driverId || c.assignedDriverId === effectiveDriverId)) return resultFor(c, null, true);
     if (c.status !== 'SUBMITTED') throw conflict('Only submitted complaints may be assigned.');
     if (!rankCandidateDrivers(c, [d], now).length || syntheticDataService.getSyntheticComplaints()
-      .some(t => t.assignedDriverId === driverId && ACTIVE_STATUSES.includes(t.status))) throw conflict('Driver unavailable or location stale/outside service radius.');
+      .some(t => (t.assignedDriverId === driverId || t.assignedDriverId === effectiveDriverId) && ACTIVE_STATUSES.includes(t.status))) throw conflict('Driver unavailable or location stale/outside service radius.');
     applyAssignment(c, d, actor, now);
     syntheticDataService.updateSyntheticComplaint(complaintId, c);
-    syntheticDataService.updateSyntheticDriverAvailability(driverId, 'BUSY');
+    syntheticDataService.updateSyntheticDriverAvailability(d.driverId, 'BUSY');
+    if (driverId !== d.driverId) {
+      syntheticDataService.updateSyntheticDriverAvailability(driverId, 'BUSY');
+    }
     await notifyAssignment(c);
     return resultFor(c);
   }

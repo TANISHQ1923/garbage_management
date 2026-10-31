@@ -73,6 +73,7 @@ import com.garbage.management.domain.model.DriverAvailability
 import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
 import com.garbage.management.presentation.components.LocationHelper
+import com.garbage.management.presentation.components.displayId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.AuthViewModel
@@ -304,20 +305,7 @@ fun DriverHomeScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (uiState.isSynthetic) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            modifier = Modifier.padding(start = 8.dp)
-                        ) {
-                            Text(
-                                text = "Synthetic Demo Data",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
+
                 }
 
             Row(
@@ -508,7 +496,7 @@ fun DriverHomeScreen(
                             color = MaterialTheme.colorScheme.surfaceVariant
                         ) {
                             Text(
-                                text = "Local Development Location",
+                                text = "GPS Live Location",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -729,7 +717,7 @@ private fun DriverTaskSummaryCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = complaint.id,
+                        text = complaint.displayId,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )

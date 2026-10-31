@@ -206,6 +206,8 @@ class ComplaintViewModel(
                         val isConnectionError = imageUploadResult.message?.contains("connect", ignoreCase = true) == true
                                 || imageUploadResult.message?.contains("timeout", ignoreCase = true) == true
                                 || imageUploadResult.message?.contains("route to host", ignoreCase = true) == true
+                                || imageUploadResult.message?.contains("Cloudinary", ignoreCase = true) == true
+                                || imageUploadResult.message?.contains("test-storage", ignoreCase = true) == true
 
                         if (isConnectionError) {
                             // Fallback to local image URI so citizen complaint submission can proceed and save offline
@@ -241,6 +243,8 @@ class ComplaintViewModel(
                         val isConnectionError = videoUploadResult.message?.contains("connect", ignoreCase = true) == true
                                 || videoUploadResult.message?.contains("timeout", ignoreCase = true) == true
                                 || videoUploadResult.message?.contains("route to host", ignoreCase = true) == true
+                                || videoUploadResult.message?.contains("Cloudinary", ignoreCase = true) == true
+                                || videoUploadResult.message?.contains("test-storage", ignoreCase = true) == true
 
                         if (isConnectionError) {
                             uploadedVideoUrl = state.videoUri

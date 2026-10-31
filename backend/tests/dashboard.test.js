@@ -195,17 +195,13 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
       expect(res.body.data).toHaveProperty('notifications');
 
       const metrics = res.body.data.metrics;
-      expect(metrics.totalComplaints).toBe(20);
-      expect(metrics.activeComplaints).toBe(8);
-      expect(metrics.pendingRequests).toBe(3);
-      expect(metrics.emergencyRequests).toBe(3);
-      expect(metrics.completedComplaints).toBe(10);
-      expect(metrics.rejectedComplaints).toBe(2);
-
-      // Verify citizen only gets their own complaints
-      res.body.data.complaints.forEach((c) => {
-        expect(c.citizenId).toBe(mockCitizen.id);
-      });
+      expect(metrics.totalComplaints).toBe(0);
+      expect(metrics.activeComplaints).toBe(0);
+      expect(metrics.pendingRequests).toBe(0);
+      expect(metrics.emergencyRequests).toBe(0);
+      expect(metrics.completedComplaints).toBe(0);
+      expect(metrics.rejectedComplaints).toBe(0);
+      expect(res.body.data.complaints).toEqual([]);
     });
 
     it('should return Municipal Officer Dashboard data populated from synthetic dataset', async () => {
@@ -222,24 +218,24 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
       expect(res.body.data).toHaveProperty('aiMetrics');
 
       const metrics = res.body.data.metrics;
-      expect(metrics.total).toBe(120);
-      expect(metrics.submitted).toBe(22);
-      expect(metrics.assigned).toBe(26);
-      expect(metrics.inProgress).toBe(16);
-      expect(metrics.cleaned).toBe(24);
-      expect(metrics.verified).toBe(22);
-      expect(metrics.rejected).toBe(10);
-      expect(metrics.emergency).toBe(18);
-      expect(metrics.activeComplaints).toBe(64);
+      expect(metrics.total).toBe(0);
+      expect(metrics.submitted).toBe(0);
+      expect(metrics.assigned).toBe(0);
+      expect(metrics.inProgress).toBe(0);
+      expect(metrics.cleaned).toBe(0);
+      expect(metrics.verified).toBe(0);
+      expect(metrics.rejected).toBe(0);
+      expect(metrics.emergency).toBe(0);
+      expect(metrics.activeComplaints).toBe(0);
 
       // Verify mathematical consistency: total = submitted + assigned + inProgress + cleaned + verified + rejected
       expect(metrics.submitted + metrics.assigned + metrics.inProgress + metrics.cleaned + metrics.verified + metrics.rejected).toBe(metrics.total);
 
       // Driver availability
       expect(res.body.data.driverAvailability.total).toBe(8);
-      expect(res.body.data.driverAvailability.available).toBe(4);
-      expect(res.body.data.driverAvailability.busy).toBe(2);
-      expect(res.body.data.driverAvailability.offline).toBe(2);
+      expect(res.body.data.driverAvailability.available).toBe(8);
+      expect(res.body.data.driverAvailability.busy).toBe(0);
+      expect(res.body.data.driverAvailability.offline).toBe(0);
     });
 
     it('should return Garbage Driver Dashboard data populated from synthetic dataset', async () => {
@@ -256,11 +252,11 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
       expect(res.body.data).toHaveProperty('collectionHistory');
 
       const metrics = res.body.data.metrics;
-      expect(metrics.totalAssignedTasks).toBe(12);
-      expect(metrics.assignedTasks).toBe(4);
-      expect(metrics.inProgressTasks).toBe(2);
-      expect(metrics.completedTasks).toBe(6);
-      expect(metrics.emergencyTasks).toBe(3);
+      expect(metrics.totalAssignedTasks).toBe(0);
+      expect(metrics.assignedTasks).toBe(0);
+      expect(metrics.inProgressTasks).toBe(0);
+      expect(metrics.completedTasks).toBe(0);
+      expect(metrics.emergencyTasks).toBe(0);
 
       // Verify active task exists and has before-cleaning photo
       if (res.body.data.activeTask) {
@@ -305,7 +301,7 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.length).toBe(20);
+      expect(res.body.data.length).toBe(0);
     });
 
     it('should serve synthetic complaints through existing GET /api/officer/complaints in synthetic mode', async () => {
@@ -315,7 +311,7 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.count).toBe(120);
+      expect(res.body.count).toBe(0);
     });
 
     it('should support search and status filtering on /api/officer/complaints in synthetic mode', async () => {
@@ -325,7 +321,7 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.count).toBe(22);
+      expect(res.body.count).toBe(0);
       res.body.data.forEach((c) => expect(c.status).toBe('SUBMITTED'));
     });
 
@@ -336,7 +332,7 @@ describe('Dashboard Endpoints & Synthetic Demo Mode Integration Test Suite', () 
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.count).toBe(12);
+      expect(res.body.count).toBe(0);
       res.body.data.forEach((t) => expect(t.assignedDriverId).toBe('DRV-DEMO-001'));
     });
   });

@@ -53,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
 import com.garbage.management.presentation.components.PriorityLevelBadge
+import com.garbage.management.presentation.components.displayId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.OfficerSortOption
@@ -312,7 +313,7 @@ fun OfficerDetailedComplaintCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = complaint.id,
+                    text = complaint.displayId,
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )

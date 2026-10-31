@@ -8,7 +8,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        val backendHost = providers.gradleProperty("pilotBackendHost").orElse("192.168.1.5").get()
+        val backendHost = providers.gradleProperty("pilotBackendHost").orElse("127.0.0.1").get()
         require(backendHost.matches(Regex("[A-Za-z0-9.-]+"))) { "Invalid pilotBackendHost" }
         buildConfigField("String", "PILOT_BACKEND_HOST", "\"$backendHost\"")
         applicationId = "com.garbage.management"

@@ -29,6 +29,35 @@ const isSyntheticMode = () => {
 };
 
 /**
+ * Resolve any driver alias or pilot identifier to its synthetic driver ID
+ */
+const resolveDriverId = (id) => {
+  if (!id) return 'DRV-DEMO-001';
+  const targetId = id.toString();
+  if (
+    targetId === 'LOCAL-PILOT-Driver' ||
+    targetId === 'DRV-882' ||
+    targetId === 'mock-driver-001' ||
+    targetId === 'EMP-DRV-001'
+  ) {
+    return 'DRV-DEMO-001';
+  }
+  if (targetId === 'DRV-104' || targetId === 'mock-driver-002' || targetId === 'EMP-DRV-002') {
+    return 'DRV-DEMO-002';
+  }
+  if (targetId === 'DRV-305' || targetId === 'mock-driver-003' || targetId === 'EMP-DRV-003') {
+    return 'DRV-DEMO-003';
+  }
+  if (targetId === 'DRV-412' || targetId === 'mock-driver-004' || targetId === 'EMP-DRV-004') {
+    return 'DRV-DEMO-004';
+  }
+  if (targetId === 'DRV-520' || targetId === 'mock-driver-005' || targetId === 'EMP-DRV-005') {
+    return 'DRV-DEMO-005';
+  }
+  return targetId;
+};
+
+/**
  * Loads the synthetic dataset from disk (cached in-memory).
  */
 const loadDataset = (forceReload = false) => {
@@ -54,6 +83,18 @@ const loadDataset = (forceReload = false) => {
     const raw = fs.readFileSync(datasetPath, 'utf-8');
     cachedDataset = JSON.parse(raw);
     lastLoadedTime = Date.now();
+
+    // Ensure all synthetic drivers have valid DEVICE source coordinates
+    if (Array.isArray(cachedDataset.drivers)) {
+      for (const d of cachedDataset.drivers) {
+        if (d.currentLocation) {
+          if (!d.currentLocation.source) d.currentLocation.source = 'DEVICE';
+          if (!d.currentLocation.timestamp || d.currentLocation.timestamp < 1793000000000) {
+            d.currentLocation.timestamp = Date.now();
+          }
+        }
+      }
+    }
 
     // Merge persistent runtime data (user-created complaints, updates, notifications)
     if (process.env.NODE_ENV !== 'test' && fs.existsSync(runtimePath)) {
@@ -92,6 +133,15 @@ const loadDataset = (forceReload = false) => {
             if (driver) driver.availability = avail;
             const user = (cachedDataset.users || []).find((u) => u.driverId === drvId);
             if (user) user.availability = avail;
+          }
+        }
+        if (runtimeData.driverLocations && typeof runtimeData.driverLocations === 'object') {
+          for (const [drvId, loc] of Object.entries(runtimeData.driverLocations)) {
+            const effectiveId = resolveDriverId(drvId);
+            const driver = (cachedDataset.drivers || []).find((d) => d.driverId === drvId || d.driverId === effectiveId);
+            if (driver && loc) {
+              driver.currentLocation = { ...loc };
+            }
           }
         }
       } catch (runtimeErr) {
@@ -198,6 +248,36 @@ const getSyntheticDrivers = () => {
 const getSyntheticComplaints = () => {
   const data = loadDataset();
   return data.complaints || [];
+};
+
+/**
+ * Get synthetic complaint by ID with backward-compatible lookup
+ * (supports SGM-101542, legacy SGM-2026-101542, CMP-xxx, or ObjectId)
+ */
+const getSyntheticComplaintById = (id) => {
+  if (!id) return null;
+  const target = String(id).trim();
+  const targetLower = target.toLowerCase();
+  const numPart = targetLower.replace(/^(sgm-|cmp-)?(20\d\d-)?/i, '');
+
+  const complaints = getSyntheticComplaints();
+  // 1. Exact match
+  const exact = complaints.find(
+    (c) => c && (c.complaintId === target || c.id === target || c._id === target)
+  );
+  if (exact) return exact;
+
+  // 2. Backward-compatible flexible match
+  if (numPart && numPart.length >= 4) {
+    return (
+      complaints.find((c) => {
+        if (!c) return false;
+        const cId = String(c.complaintId || '').toLowerCase();
+        return cId.endsWith(numPart) || cId.includes(numPart);
+      }) || null
+    );
+  }
+  return null;
 };
 
 /**
@@ -374,20 +454,21 @@ const getDriverDashboardData = (driverId) => {
   const allComplaints = data.complaints || [];
   const allDrivers = data.drivers || [];
   const targetId = driverId ? driverId.toString() : '';
+  const effectiveDriverId = resolveDriverId(targetId);
 
   // Filter tasks assigned to this driver
-  let driverTasks = allComplaints.filter((c) => c.assignedDriverId === targetId);
-  let effectiveDriverId = targetId;
+  let driverTasks = allComplaints.filter(
+    (c) => c.assignedDriverId === targetId || c.assignedDriverId === effectiveDriverId
+  );
 
   if (driverTasks.length === 0 && allComplaints.length > 0) {
-    // Fallback to first synthetic driver
-    effectiveDriverId = 'DRV-DEMO-001';
-    driverTasks = allComplaints.filter((c) => c.assignedDriverId === effectiveDriverId);
+    // Fallback to primary synthetic driver
+    driverTasks = allComplaints.filter((c) => c.assignedDriverId === 'DRV-DEMO-001');
   }
 
-  const driverRecord = allDrivers.find((d) => d.driverId === effectiveDriverId) || {
+  const driverRecord = allDrivers.find((d) => d.driverId === effectiveDriverId || d.driverId === targetId) || {
     driverId: effectiveDriverId,
-    name: driverTasks[0]?.assignedDriverName || 'Demo Driver',
+    name: driverTasks[0]?.assignedDriverName || 'Ramesh Shinde',
     vehicleNumber: driverTasks[0]?.assignedVehicleNumber || 'MH-DEMO-001',
     vehicleType: 'Heavy Compactor Truck',
     availability: 'AVAILABLE',
@@ -448,10 +529,17 @@ const persistRuntimeData = () => {
         driverAvailability[d.driverId] = d.availability;
       }
     }
+    const driverLocations = {};
+    for (const d of cachedDataset.drivers || []) {
+      if (d.driverId && d.currentLocation) {
+        driverLocations[d.driverId] = d.currentLocation;
+      }
+    }
     const payload = {
       complaints: runtimeComplaints,
       notifications: runtimeNotifications,
-      driverAvailability
+      driverAvailability,
+      driverLocations
     };
     fs.writeFileSync(runtimePath, JSON.stringify(payload, null, 2), 'utf-8');
   } catch (err) {
@@ -504,13 +592,34 @@ const addSyntheticNotification = (notification) => {
  */
 const updateSyntheticDriverAvailability = (driverId, availability) => {
   const data = loadDataset();
-  const driver = (data.drivers || []).find((d) => d.driverId === driverId);
+  const effectiveId = resolveDriverId(driverId);
+  const driver = (data.drivers || []).find((d) => d.driverId === driverId || d.driverId === effectiveId);
   if (driver) {
     driver.availability = availability;
-    const user = (data.users || []).find((u) => u.driverId === driverId);
+    const user = (data.users || []).find((u) => u.driverId === driverId || u.driverId === effectiveId);
     if (user) {
       user.availability = availability;
     }
+    persistRuntimeData();
+    return driver;
+  }
+  return null;
+};
+
+/**
+ * Update synthetic driver GPS coordinates in memory and persist to disk
+ */
+const updateSyntheticDriverLocation = (driverId, location) => {
+  const data = loadDataset();
+  const effectiveId = resolveDriverId(driverId);
+  const driver = (data.drivers || []).find((d) => d.driverId === driverId || d.driverId === effectiveId);
+  if (driver && location) {
+    driver.currentLocation = {
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+      timestamp: location.timestamp || Date.now(),
+      source: location.source || 'DEVICE'
+    };
     persistRuntimeData();
     return driver;
   }
@@ -527,12 +636,14 @@ const resetSyntheticCache = () => {
 
 module.exports = {
   isSyntheticMode,
+  resolveDriverId,
   loadDataset,
   getSyntheticUsers,
   getSyntheticUserByEmail,
   getSyntheticUserById,
   getSyntheticDrivers,
   getSyntheticComplaints,
+  getSyntheticComplaintById,
   getSyntheticNotifications,
   getCitizenDashboardData,
   getOfficerDashboardData,
@@ -541,5 +652,6 @@ module.exports = {
   updateSyntheticComplaint,
   addSyntheticNotification,
   updateSyntheticDriverAvailability,
+  updateSyntheticDriverLocation,
   resetSyntheticCache
 };

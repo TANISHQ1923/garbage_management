@@ -232,6 +232,25 @@ describe('Priority Queue and Scoring Test Suite', () => {
   // 11. Synthetic demo mode returns queue data
   it('11. should return valid priority queue in synthetic demo mode for authorized officer', async () => {
     jest.spyOn(syntheticDataService, 'isSyntheticMode').mockReturnValue(true);
+    const mockComplaints = [
+      {
+        complaintId: 'SGM-100001',
+        status: 'SUBMITTED',
+        garbageType: 'OVERFLOWING_BIN',
+        isEmergency: false,
+        severity: 'HIGH',
+        createdAt: new Date().toISOString()
+      },
+      {
+        complaintId: 'SGM-100002',
+        status: 'ASSIGNED',
+        garbageType: 'ROADSIDE_GARBAGE',
+        isEmergency: true,
+        severity: 'CRITICAL',
+        createdAt: new Date().toISOString()
+      }
+    ];
+    jest.spyOn(syntheticDataService, 'getSyntheticComplaints').mockReturnValue(mockComplaints);
 
     const res = await request(app)
       .get('/api/officer/complaints/priority-queue')
@@ -259,6 +278,17 @@ describe('Priority Queue and Scoring Test Suite', () => {
   // 12. Existing complaint and dashboard APIs continue working
   it('12. should preserve existing officer complaints listing and sorting', async () => {
     jest.spyOn(syntheticDataService, 'isSyntheticMode').mockReturnValue(true);
+    const mockComplaints = [
+      {
+        complaintId: 'SGM-100001',
+        status: 'SUBMITTED',
+        garbageType: 'OVERFLOWING_BIN',
+        isEmergency: false,
+        severity: 'HIGH',
+        createdAt: new Date().toISOString()
+      }
+    ];
+    jest.spyOn(syntheticDataService, 'getSyntheticComplaints').mockReturnValue(mockComplaints);
 
     const res = await request(app)
       .get('/api/officer/complaints?sort=priority')

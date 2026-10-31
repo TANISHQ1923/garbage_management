@@ -51,6 +51,7 @@ import com.garbage.management.domain.model.AppNotification
 import com.garbage.management.domain.model.AuthState
 import com.garbage.management.domain.model.NotificationType
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
+import com.garbage.management.presentation.components.formatDisplayComplaintId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getNotificationTypeIcon
 import com.garbage.management.presentation.viewmodel.AuthViewModel
@@ -350,7 +351,7 @@ fun NotificationItemCard(
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                             ) {
                                 Text(
-                                    text = notification.complaintId,
+                                    text = formatDisplayComplaintId(notification.complaintId),
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

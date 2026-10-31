@@ -1,6 +1,8 @@
 package com.garbage.management.presentation.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Card
@@ -199,5 +202,178 @@ fun RoleBadge(
             color = textColor,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
         )
+    }
+}
+
+/**
+ * Clean, compact government-style error alert banner.
+ * Avoids displaying stack traces, API endpoints, or raw technical errors to citizens.
+ */
+@Composable
+fun GovernmentErrorCard(
+    message: String = "Unable to load information. Please try again.",
+    onRetry: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFCA5A5)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Info,
+                    contentDescription = null,
+                    tint = Color(0xFFDC2626),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (message.contains("Exception") || message.contains("connect") || message.contains("500") || message.contains("ECONN")) {
+                        "Unable to load information. Please check connection and try again."
+                    } else {
+                        message
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    color = Color(0xFF991B1B)
+                )
+            }
+            if (onRetry != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                androidx.compose.material3.TextButton(
+                    onClick = onRetry,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Retry",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                        color = Color(0xFFDC2626)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Official, compact stat metric card for government dashboards.
+ */
+@Composable
+fun GovernmentStatCard(
+    count: Int,
+    label: String,
+    modifier: Modifier = Modifier,
+    indicatorColor: Color = MaterialTheme.colorScheme.primary
+) {
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "$count",
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Surface(
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = indicatorColor.copy(alpha = 0.15f),
+                    modifier = Modifier.size(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(indicatorColor, androidx.compose.foundation.shape.CircleShape)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * Clean, respectful empty state indicator.
+ */
+@Composable
+fun GovernmentEmptyState(
+    title: String,
+    description: String,
+    icon: ImageVector = androidx.compose.material.icons.Icons.Default.Info,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 32.dp, horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Surface(
+            shape = androidx.compose.foundation.shape.CircleShape,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(56.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        if (actionText != null && onActionClick != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            androidx.compose.material3.OutlinedButton(
+                onClick = onActionClick,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(text = actionText, style = MaterialTheme.typography.labelMedium)
+            }
+        }
     }
 }

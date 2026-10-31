@@ -56,6 +56,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.garbage.management.domain.model.ComplaintStatus
+import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.domain.model.GarbageType
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.text.SimpleDateFormat
@@ -497,3 +498,45 @@ object LocationHelper {
         }
     }
 }
+
+/**
+ * Simplifies long and legacy complaint identifiers into a short, clean,
+ * government-standard reference format: SGM-XXXXXX (e.g. SGM-101542).
+ * Fully backward-compatible with legacy formats: SGM-2026-101542, CMP-551912-8624, etc.
+ */
+fun formatDisplayComplaintId(rawId: String?): String {
+    if (rawId.isNullOrBlank()) return "SGM-000000"
+    val clean = rawId.trim()
+
+    // 1. If already SGM-XXXXXX (6 digits or alphanumeric characters)
+    if (clean.matches(Regex("^SGM-[A-Za-z0-9]{5,8}$", RegexOption.IGNORE_CASE))) {
+        return clean.uppercase(Locale.ROOT)
+    }
+
+    // 2. Legacy SGM-YYYY-XXXXXX format (e.g., SGM-2026-102881 -> SGM-102881)
+    val sgmYearMatch = Regex("^SGM-\\d{4}-([A-Za-z0-9]+)$", RegexOption.IGNORE_CASE).find(clean)
+    if (sgmYearMatch != null) {
+        val suffix = sgmYearMatch.groupValues[1]
+        val shortNum = if (suffix.length > 6) suffix.takeLast(6) else suffix.padStart(6, '0')
+        return "SGM-$shortNum".uppercase(Locale.ROOT)
+    }
+
+    // 3. Legacy CMP-XXXXXX-XXXX format (e.g. CMP-551912-8624 -> SGM-551912)
+    val cmpMatch = Regex("^CMP-([A-Za-z0-9]+)(?:-[A-Za-z0-9]+)?$", RegexOption.IGNORE_CASE).find(clean)
+    if (cmpMatch != null) {
+        val numPart = cmpMatch.groupValues[1]
+        val shortNum = if (numPart.length > 6) numPart.takeLast(6) else numPart.padStart(6, '0')
+        return "SGM-$shortNum".uppercase(Locale.ROOT)
+    }
+
+    // 4. Any numeric timestamp or Mongo hex ID: extract clean 6 digits
+    val digits = clean.filter { it.isDigit() }
+    if (digits.length >= 6) {
+        return "SGM-${digits.takeLast(6)}"
+    }
+
+    return "SGM-${clean.takeLast(6)}".uppercase(Locale.ROOT)
+}
+
+val GarbageComplaint.displayId: String
+    get() = formatDisplayComplaintId(this.id)

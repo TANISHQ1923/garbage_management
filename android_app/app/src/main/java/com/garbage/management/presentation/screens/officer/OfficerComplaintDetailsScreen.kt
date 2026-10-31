@@ -87,6 +87,8 @@ import com.garbage.management.domain.usecase.StatusTransitionValidator
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
 import com.garbage.management.presentation.components.PriorityLevelBadge
 import com.garbage.management.presentation.components.UriImageViewer
+import com.garbage.management.presentation.components.displayId
+import com.garbage.management.presentation.components.formatDisplayComplaintId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getComplaintStatusDescription
 import com.garbage.management.presentation.components.getGarbageTypeIcon
@@ -181,7 +183,7 @@ fun OfficerComplaintDetailsScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Complaint '$complaintId' not found.",
+                        text = "Complaint '${formatDisplayComplaintId(complaintId)}' not found.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.error
                     )

@@ -65,6 +65,7 @@ import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
 import com.garbage.management.presentation.components.PriorityLevelBadge
 import com.garbage.management.presentation.components.RoleBadge
+import com.garbage.management.presentation.components.displayId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.AuthViewModel
@@ -221,20 +222,7 @@ fun OfficerHomeScreen(
                             text = "Municipal Overview",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                         )
-                        if (dashboardState.isSynthetic) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                modifier = Modifier.padding(start = 8.dp)
-                            ) {
-                                Text(
-                                    text = "Synthetic Demo Data",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
+
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     OfficerMetricsGrid(
@@ -671,7 +659,7 @@ fun OfficerPriorityCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = complaint.id,
+                    text = complaint.displayId,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -787,7 +775,7 @@ fun OfficerComplaintListItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = complaint.id,
+                        text = complaint.displayId,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )

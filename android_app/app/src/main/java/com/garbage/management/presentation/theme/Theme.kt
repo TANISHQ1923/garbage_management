@@ -26,7 +26,9 @@ private val DarkColorScheme = darkColorScheme(
     surface = SurfaceDark,
     onSurface = OnSurfaceDark,
     surfaceVariant = SurfaceVariantDark,
-    onSurfaceVariant = OnSurfaceVariantDark
+    onSurfaceVariant = OnSurfaceVariantDark,
+    outline = OutlineDark,
+    outlineVariant = OutlineDark
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -45,13 +47,15 @@ private val LightColorScheme = lightColorScheme(
     surface = SurfaceLight,
     onSurface = OnSurfaceLight,
     surfaceVariant = SurfaceVariantLight,
-    onSurfaceVariant = OnSurfaceVariantLight
+    onSurfaceVariant = OnSurfaceVariantLight,
+    outline = OutlineLight,
+    outlineVariant = OutlineLight
 )
 
 @Composable
 fun SmartGarbageTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // disabled by default to preserve eco branding
+    dynamicColor: Boolean = false, // disabled by default to preserve official government palette
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

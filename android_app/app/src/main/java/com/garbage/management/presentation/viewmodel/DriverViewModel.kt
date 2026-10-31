@@ -303,8 +303,24 @@ class DriverViewModel(
     }
 
     fun loadComplaintDetail(complaintId: String) {
+        val preloaded = if (_uiState.value.activeTask?.id.equals(complaintId, ignoreCase = true)) {
+            _uiState.value.activeTask
+        } else {
+            _uiState.value.allTasks.find { it.id.equals(complaintId, ignoreCase = true) }
+                ?: _uiState.value.historyComplaints.find { it.id.equals(complaintId, ignoreCase = true) }
+        }
+
+        _uiState.update {
+            it.copy(
+                isLoadingDetail = preloaded == null,
+                currentComplaintDetail = preloaded ?: it.currentComplaintDetail,
+                draftBeforeImageUri = preloaded?.beforeCleaningImageUri ?: it.draftBeforeImageUri,
+                draftAfterImageUri = preloaded?.afterCleaningImageUri ?: it.draftAfterImageUri,
+                errorMessage = null
+            )
+        }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingDetail = true, errorMessage = null) }
             val result = getComplaintByIdUseCase(complaintId)
             when (result) {
                 is Resource.Success -> {
@@ -313,8 +329,8 @@ class DriverViewModel(
                         it.copy(
                             isLoadingDetail = false,
                             currentComplaintDetail = complaint,
-                            draftBeforeImageUri = complaint?.beforeCleaningImageUri,
-                            draftAfterImageUri = complaint?.afterCleaningImageUri
+                            draftBeforeImageUri = complaint?.beforeCleaningImageUri ?: it.draftBeforeImageUri,
+                            draftAfterImageUri = complaint?.afterCleaningImageUri ?: it.draftAfterImageUri
                         )
                     }
                 }
@@ -322,7 +338,7 @@ class DriverViewModel(
                     _uiState.update {
                         it.copy(
                             isLoadingDetail = false,
-                            errorMessage = result.message ?: "Complaint not found."
+                            errorMessage = if (it.currentComplaintDetail == null) (result.message ?: "Complaint not found.") else null
                         )
                     }
                 }

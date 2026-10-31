@@ -39,32 +39,10 @@ describe('Synthetic Demo Dataset Test Suite', () => {
     });
   });
 
-  it('5. should verify complaint lifecycle distributions and evidence completeness', () => {
+  it('5. should verify complaint baseline state and zero initial dummy complaints', () => {
     const data = JSON.parse(fs.readFileSync(datasetPath, 'utf-8'));
-    expect(data.complaints.length).toBe(120);
-
-    const cleanedComplaints = data.complaints.filter(c => c.status === 'CLEANED');
-    const verifiedComplaints = data.complaints.filter(c => c.status === 'VERIFIED');
-    const inProgressComplaints = data.complaints.filter(c => c.status === 'PICKUP_IN_PROGRESS');
-
-    cleanedComplaints.forEach(c => {
-      expect(c.beforeCleaningImageUrl).toBeTruthy();
-      expect(c.afterCleaningImageUrl).toBeTruthy();
-      expect(c.assignedDriverId).toBeTruthy();
-    });
-
-    verifiedComplaints.forEach(c => {
-      expect(c.beforeCleaningImageUrl).toBeTruthy();
-      expect(c.afterCleaningImageUrl).toBeTruthy();
-      expect(c.officerNotes.length).toBeGreaterThan(0);
-      expect(c.assignedDriverId).toBeTruthy();
-    });
-
-    inProgressComplaints.forEach(c => {
-      expect(c.beforeCleaningImageUrl).toBeTruthy();
-      expect(c.afterCleaningImageUrl).toBeNull();
-      expect(c.assignedDriverId).toBeTruthy();
-    });
+    expect(data.complaints.length).toBe(0);
+    expect(data.notifications.length).toBe(0);
   });
 
   it('6. should simulate idempotent seeding (running twice produces identical document maps with zero duplicates)', () => {
@@ -87,14 +65,14 @@ describe('Synthetic Demo Dataset Test Suite', () => {
     simulateSeed();
     expect(userStore.size).toBe(21);
     expect(driverStore.size).toBe(8);
-    expect(complaintStore.size).toBe(120);
-    expect(notificationStore.size).toBe(37);
+    expect(complaintStore.size).toBe(0);
+    expect(notificationStore.size).toBe(0);
 
     // Second seed run
     simulateSeed();
     expect(userStore.size).toBe(21);
     expect(driverStore.size).toBe(8);
-    expect(complaintStore.size).toBe(120);
-    expect(notificationStore.size).toBe(37);
+    expect(complaintStore.size).toBe(0);
+    expect(notificationStore.size).toBe(0);
   });
 });

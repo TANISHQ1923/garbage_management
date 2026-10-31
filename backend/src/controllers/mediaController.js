@@ -1,4 +1,6 @@
 const { uploadMedia, validateMedia } = require('../services/mediaService');
+const syntheticDataService = require('../services/syntheticDataService');
+const { getDBStatus } = require('../config/db');
 
 /**
  * Upload image or video to Cloudinary
@@ -18,8 +20,18 @@ const handleUpload = async (req, res, next) => {
 
     const evidence = ['before-cleaning', 'after-cleaning'].includes(folder);
     if (evidence) {
-      const complaint = complaintId && await require('../models/Complaint').findOne({ complaintId });
-      if (!complaint || req.user.role !== 'GARBAGE_DRIVER' || complaint.assignedDriverId !== req.user.driverId) {
+      let complaint = null;
+      if (syntheticDataService.isSyntheticMode()) {
+        complaint = syntheticDataService.getSyntheticComplaintById(complaintId);
+      }
+      if (!complaint && getDBStatus().isConnected) {
+        complaint = complaintId && await require('../models/Complaint').findOne({ complaintId });
+      }
+      const driverId = req.user.driverId || req.user.id || req.user._id?.toString();
+      const effectiveDriverId = syntheticDataService.resolveDriverId ? syntheticDataService.resolveDriverId(driverId) : driverId;
+      const effectiveAssigned = syntheticDataService.resolveDriverId ? syntheticDataService.resolveDriverId(complaint?.assignedDriverId) : complaint?.assignedDriverId;
+
+      if (!complaint || req.user.role !== 'GARBAGE_DRIVER' || (complaint.assignedDriverId !== driverId && effectiveAssigned !== effectiveDriverId && complaint.assignedDriverId !== effectiveDriverId)) {
         return res.status(403).json({ success: false, message: 'Photo evidence may only be uploaded by the assigned driver for this task.' });
       }
       if (!['ASSIGNED', 'PICKUP_IN_PROGRESS'].includes(complaint.status)) {
@@ -29,8 +41,10 @@ const handleUpload = async (req, res, next) => {
     }
 
     const result = await uploadMedia(req.file, { folder, complaintId });
-    if (evidence) await require('../models/StoredMedia').create({ publicId: result.publicId, url: result.url,
-      resourceType: result.resourceType, complaintId, folder, uploadedBy: String(req.user.id || req.user._id) });
+    if (evidence && getDBStatus().isConnected) {
+      await require('../models/StoredMedia').create({ publicId: result.publicId, url: result.url,
+        resourceType: result.resourceType, complaintId, folder, uploadedBy: String(req.user.id || req.user._id) });
+    }
 
     return res.status(200).json({
       success: true,

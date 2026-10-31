@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.garbage.management.presentation.components.ComplaintStatusBadge
 import com.garbage.management.presentation.components.PrimaryAppButton
+import com.garbage.management.presentation.components.formatDisplayComplaintId
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.ComplaintViewModel
 
@@ -171,13 +172,13 @@ fun ComplaintSubmittedScreen(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "COMPLAINT REFERENCE ID",
+                    text = "COMPLAINT REFERENCE NUMBER",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = complaintId,
+                    text = formatDisplayComplaintId(complaintId),
                     style = MaterialTheme.typography.headlineSmall.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary

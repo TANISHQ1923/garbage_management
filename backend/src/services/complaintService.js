@@ -30,9 +30,12 @@ const canDriverTransition = (currentStatus, targetStatus) => {
 };
 
 const generateComplaintId = () => {
-  const timestamp = Date.now().toString().slice(-6);
-  const random = Math.floor(1000 + Math.random() * 9000);
-  return `CMP-${timestamp}-${random}`;
+  // Shorter, cleaner government service reference format: SGM-XXXXXX (6-digit numeric reference)
+  // e.g. SGM-101542
+  const min = 100000;
+  const max = 999999;
+  const num = Math.floor(min + Math.random() * (max - min + 1));
+  return `SGM-${num}`;
 };
 
 module.exports = {

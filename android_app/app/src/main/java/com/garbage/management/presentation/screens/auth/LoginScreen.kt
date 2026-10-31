@@ -109,7 +109,7 @@ fun LoginScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "Smart • Clean • Connected",
+            text = "Public Cleanliness & Waste Management Portal",
             style = MaterialTheme.typography.bodyMedium.copy(
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold
@@ -302,7 +302,7 @@ fun LoginScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Development Demo Accounts (Tap to fill)",
+                        text = "Quick Sign-In (Staff & Evaluation)",
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -349,7 +349,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Demo Password: password123",
+                    text = "Default Access PIN: password123",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

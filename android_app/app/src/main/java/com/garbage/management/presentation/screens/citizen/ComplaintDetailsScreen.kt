@@ -64,6 +64,8 @@ import com.garbage.management.presentation.components.AppTopBar
 import com.garbage.management.presentation.components.ComplaintStatusBadge
 import com.garbage.management.presentation.components.StatusTimelineView
 import com.garbage.management.presentation.components.UriImageViewer
+import com.garbage.management.presentation.components.displayId
+import com.garbage.management.presentation.components.formatDisplayComplaintId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.AuthViewModel
@@ -93,7 +95,7 @@ fun ComplaintDetailsScreen(
     Scaffold(
         topBar = {
             AppTopBar(
-                title = "Complaint Details",
+                title = "Complaint ${formatDisplayComplaintId(complaintId)}",
                 onBackClick = onNavigateBack
             )
         },
@@ -152,7 +154,7 @@ fun ComplaintDetailsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = complaint.id,
+                                    text = complaint.displayId,
                                     style = MaterialTheme.typography.titleLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary

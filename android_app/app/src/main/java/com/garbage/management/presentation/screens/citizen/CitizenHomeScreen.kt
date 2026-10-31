@@ -67,6 +67,10 @@ import com.garbage.management.domain.model.GarbageComplaint
 import com.garbage.management.presentation.components.ComplaintStatusBadge
 import com.garbage.management.presentation.components.EmergencyPriorityBadge
 import com.garbage.management.presentation.components.RoleBadge
+import com.garbage.management.presentation.components.GovernmentErrorCard
+import com.garbage.management.presentation.components.GovernmentStatCard
+import com.garbage.management.presentation.components.GovernmentEmptyState
+import com.garbage.management.presentation.components.displayId
 import com.garbage.management.presentation.components.formatTimestamp
 import com.garbage.management.presentation.components.getGarbageTypeIcon
 import com.garbage.management.presentation.viewmodel.AuthViewModel
@@ -137,7 +141,7 @@ fun CitizenHomeScreen(
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                text = "Smart City Citizen Portal",
+                                text = "Public Grievance Redressal Portal",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -199,34 +203,13 @@ fun CitizenHomeScreen(
                     .verticalScroll(scrollState)
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
-                // ERROR BANNER IF AVAILABLE
+                                // CITIZEN-FRIENDLY ERROR BANNER
                 citizenDashboardState.errorMessage?.let { error ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = error,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            TextButton(onClick = { currentUser?.id?.let { complaintViewModel.loadCitizenDashboard(it) } }) {
-                                Text("Retry", color = MaterialTheme.colorScheme.onErrorContainer)
-                            }
-                        }
-                    }
+                    GovernmentErrorCard(
+                        message = "Unable to load dashboard information. Please try again.",
+                        onRetry = { currentUser?.id?.let { complaintViewModel.loadCitizenDashboard(it) } },
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    )
                 }
 
                 // STATUS OVERVIEW HEADER WITH SYNTHETIC DEMO DATA BADGE
@@ -240,40 +223,25 @@ fun CitizenHomeScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    if (citizenDashboardState.isSynthetic) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            modifier = Modifier.padding(start = 8.dp)
-                        ) {
-                            Text(
-                                text = "Synthetic Demo Data",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
+
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
+                                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    StatusSummaryMetricCard(
+                    GovernmentStatCard(
                         count = citizenDashboardState.activeComplaints,
-                        label = "Active Complaints",
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        textColor = MaterialTheme.colorScheme.primary,
+                        label = "Active Issues",
+                        indicatorColor = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f)
                     )
-                    StatusSummaryMetricCard(
+                    GovernmentStatCard(
                         count = citizenDashboardState.pendingRequests,
-                        label = "Pending Requests",
-                        containerColor = Color(0xFFFFF3E0),
-                        textColor = Color(0xFFE65100),
+                        label = "Pending Action",
+                        indicatorColor = Color(0xFFB45309),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -284,18 +252,16 @@ fun CitizenHomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    StatusSummaryMetricCard(
+                    GovernmentStatCard(
                         count = citizenDashboardState.emergencyRequests,
-                        label = "Emergency Requests",
-                        containerColor = Color(0xFFFFEBEE),
-                        textColor = Color(0xFFC62828),
+                        label = "Emergency Tasks",
+                        indicatorColor = Color(0xFFC62828),
                         modifier = Modifier.weight(1f)
                     )
-                    StatusSummaryMetricCard(
+                    GovernmentStatCard(
                         count = citizenDashboardState.completedComplaints,
-                        label = "Completed",
-                        containerColor = Color(0xFFE8F5E9),
-                        textColor = Color(0xFF2E7D32),
+                        label = "Resolved & Cleaned",
+                        indicatorColor = Color(0xFF2E7D32),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -396,7 +362,7 @@ fun CitizenHomeScreen(
                     iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = {
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Vehicle Tracking will be unlocked in Step 5 (IoT & Tracking).")
+                            snackbarHostState.showSnackbar("Vehicle tracking service is currently being onboarded for your municipal ward.")
                         }
                     },
                     modifier = Modifier.weight(1f)
@@ -412,7 +378,7 @@ fun CitizenHomeScreen(
                     iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = {
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("QR Scanning will be unlocked in Step 5 (Smart Bins).")
+                            snackbarHostState.showSnackbar("Smart bin QR scanning service is currently being onboarded for your municipal ward.")
                         }
                     },
                     modifier = Modifier.weight(1f)
@@ -431,7 +397,7 @@ fun CitizenHomeScreen(
                 iconTint = MaterialTheme.colorScheme.tertiary,
                 onClick = {
                     coroutineScope.launch {
-                        snackbarHostState.showSnackbar("Feedback is enabled once a complaint reaches 'Cleaned' status.")
+                        snackbarHostState.showSnackbar("Citizen feedback is enabled once your complaint reaches 'Cleaned' status.")
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -641,7 +607,7 @@ fun RecentComplaintCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = complaint.id,
+                        text = complaint.displayId,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )

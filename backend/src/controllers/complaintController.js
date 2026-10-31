@@ -233,8 +233,19 @@ const getComplaintById = async (req, res, next) => {
 
     // Driver can only access complaints assigned to them
     if (req.user.role === 'GARBAGE_DRIVER') {
-      const driverId = req.user.driverId || currentUserId;
-      if (complaint.assignedDriverId !== driverId) {
+      const userDriverId = req.user.driverId || currentUserId;
+      const effectiveReqDriverId = syntheticDataService.resolveDriverId
+        ? syntheticDataService.resolveDriverId(userDriverId)
+        : userDriverId;
+      const effectiveAssignedDriverId = syntheticDataService.resolveDriverId
+        ? syntheticDataService.resolveDriverId(complaint.assignedDriverId)
+        : complaint.assignedDriverId;
+
+      if (
+        complaint.assignedDriverId !== userDriverId &&
+        effectiveAssignedDriverId !== effectiveReqDriverId &&
+        complaint.assignedDriverId !== effectiveReqDriverId
+      ) {
         return res.status(403).json({
           success: false,
           message: 'Access denied: This complaint is not assigned to you.'

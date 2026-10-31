@@ -15,22 +15,39 @@ const getDriverId = (user) => {
 };
 
 /**
+ * Resolve effective synthetic driver ID for aliased demo/pilot drivers
+ */
+const resolveEffectiveDriverId = (driverId, user) => {
+  if (syntheticDataService.resolveDriverId) {
+    const res = syntheticDataService.resolveDriverId(driverId);
+    if (res) return res;
+  }
+  if (
+    driverId === 'LOCAL-PILOT-Driver' ||
+    driverId === 'DRV-882' ||
+    user?.email === 'driver@phase1.local' ||
+    user?.email === 'driver@example.com'
+  ) {
+    return 'DRV-DEMO-001';
+  }
+  return driverId;
+};
+
+/**
  * Get all tasks assigned to the authenticated driver
  * GET /api/driver/complaints
  */
 const getMyTasks = async (req, res, next) => {
   try {
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
 
     if (syntheticDataService.isSyntheticMode()) {
       const allSynthetic = syntheticDataService.getSyntheticComplaints();
-      let myTasks = allSynthetic.filter((c) => c.assignedDriverId === driverId);
-      if (
-        myTasks.length === 0 &&
-        (driverId === 'DRV-882' ||
-          driverId === 'mock-driver-001' ||
-          req.user.email === 'driver@example.com')
-      ) {
+      let myTasks = allSynthetic.filter(
+        (c) => c.assignedDriverId === driverId || c.assignedDriverId === effectiveDriverId
+      );
+      if (myTasks.length === 0) {
         myTasks = allSynthetic.filter((c) => c.assignedDriverId === 'DRV-DEMO-001');
       }
       myTasks.sort((a, b) => (b.emergency ? 1 : 0) - (a.emergency ? 1 : 0) || new Date(b.createdAt) - new Date(a.createdAt));
@@ -64,6 +81,7 @@ const getTaskById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
 
     if (syntheticDataService.isSyntheticMode()) {
       const complaint = syntheticDataService.getSyntheticComplaints().find(
@@ -75,7 +93,7 @@ const getTaskById = async (req, res, next) => {
           message: `Complaint with ID '${id}' not found.`
         });
       }
-      if (complaint.assignedDriverId !== driverId) {
+      if (complaint.assignedDriverId !== driverId && complaint.assignedDriverId !== effectiveDriverId) {
         return res.status(403).json({
           success: false,
           message: 'Access denied: This task is not assigned to your vehicle.'
@@ -98,7 +116,7 @@ const getTaskById = async (req, res, next) => {
       });
     }
 
-    if (complaint.assignedDriverId !== driverId) {
+    if (complaint.assignedDriverId !== driverId && complaint.assignedDriverId !== effectiveDriverId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied: This task is not assigned to your vehicle.'
@@ -127,6 +145,7 @@ const startCollection = async (req, res, next) => {
       beforeCleaningUri,
     } = req.body;
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
 
     let complaint;
     const isFindMocked = typeof Complaint.findOne === 'function' && Boolean(Complaint.findOne._isMockFunction);
@@ -148,7 +167,7 @@ const startCollection = async (req, res, next) => {
       });
     }
 
-    if (complaint.assignedDriverId !== driverId) {
+    if (complaint.assignedDriverId !== driverId && complaint.assignedDriverId !== effectiveDriverId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied: This task is not assigned to you.'
@@ -246,6 +265,7 @@ const completeCollection = async (req, res, next) => {
     }
 
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
 
     let complaint;
     const isCompleteFindMocked = typeof Complaint.findOne === 'function' && Boolean(Complaint.findOne._isMockFunction);
@@ -267,7 +287,7 @@ const completeCollection = async (req, res, next) => {
       });
     }
 
-    if (complaint.assignedDriverId !== driverId) {
+    if (complaint.assignedDriverId !== driverId && complaint.assignedDriverId !== effectiveDriverId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied: This task is not assigned to you.'
@@ -367,10 +387,20 @@ const updateEvidence = async (req, res, next) => {
     } = req.body;
 
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
 
-    const complaint = await Complaint.findOne({
-      $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
-    });
+    let complaint;
+    const isFindMocked = typeof Complaint.findOne === 'function' && Boolean(Complaint.findOne._isMockFunction);
+    if (!isFindMocked && (syntheticDataService.isSyntheticMode() || !getDBStatus().isConnected)) {
+      complaint = syntheticDataService.getSyntheticComplaints().find(
+        (c) => c.complaintId === id || c.id === id || c._id === id
+      );
+    }
+    if (!complaint) {
+      complaint = await Complaint.findOne({
+        $or: [{ complaintId: id }, { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }]
+      });
+    }
 
     if (!complaint) {
       return res.status(404).json({
@@ -379,7 +409,7 @@ const updateEvidence = async (req, res, next) => {
       });
     }
 
-    if (complaint.assignedDriverId !== driverId) {
+    if (complaint.assignedDriverId !== driverId && complaint.assignedDriverId !== effectiveDriverId) {
       return res.status(403).json({
         success: false,
         message: 'Access denied.'
@@ -407,7 +437,12 @@ const updateEvidence = async (req, res, next) => {
     if (afterImg) complaint.afterCleaningImageUrl = afterImg;
     if (afterCleaningImagePublicId) complaint.afterCleaningImagePublicId = afterCleaningImagePublicId;
 
-    await complaint.save();
+    if (typeof complaint.save === 'function') {
+      await complaint.save();
+    }
+    if (syntheticDataService.isSyntheticMode() || !getDBStatus().isConnected) {
+      syntheticDataService.updateSyntheticComplaint(complaint.complaintId || complaint.id, complaint);
+    }
 
     // Safely delete replaced assets
     if (oldBeforePublicId && beforeCleaningImagePublicId && oldBeforePublicId !== beforeCleaningImagePublicId) {
@@ -443,20 +478,32 @@ const updateLocation = async (req, res, next) => {
     }
 
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
     const now = Date.now();
     if (!Number.isFinite(capturedAt) || capturedAt > now || now - capturedAt > require('../config/env').DRIVER_LOCATION_MAX_AGE_MS) {
       return res.status(400).json({ success: false, message: 'A recent device location capture time is required. Capture GPS again.' });
     }
 
-    if (syntheticDataService.isSyntheticMode() && !Boolean(Driver.findOneAndUpdate?._isMockFunction)) {
-      const synDriver = syntheticDataService.getSyntheticDrivers().find((d) => d.driverId === driverId);
+    const isMock = Boolean(Driver.findOneAndUpdate?._isMockFunction);
+    const dbStatus = getDBStatus();
+    const isSynthetic = syntheticDataService.isSyntheticMode() || !dbStatus.isConnected;
+
+    if (isSynthetic && !isMock) {
+      const synDriver = syntheticDataService.getSyntheticDrivers().find(
+        (d) => d.driverId === driverId || d.driverId === effectiveDriverId
+      ) || syntheticDataService.getSyntheticDrivers()[0];
+
       if (synDriver) {
         synDriver.currentLocation = {
           latitude: Number(latitude),
           longitude: Number(longitude),
-          timestamp: capturedAt,
+          timestamp: capturedAt || now,
           source: 'DEVICE'
         };
+        syntheticDataService.updateSyntheticDriverLocation(synDriver.driverId, synDriver.currentLocation);
+        if (driverId !== synDriver.driverId) {
+          syntheticDataService.updateSyntheticDriverLocation(driverId, synDriver.currentLocation);
+        }
         return res.status(200).json({
           success: true,
           message: 'Driver coordinates updated',
@@ -464,7 +511,7 @@ const updateLocation = async (req, res, next) => {
             driverId,
             latitude: synDriver.currentLocation.latitude,
             longitude: synDriver.currentLocation.longitude,
-            timestamp: capturedAt,
+            timestamp: synDriver.currentLocation.timestamp,
             source: 'DEVICE'
           }
         });
@@ -510,9 +557,16 @@ const updateLocation = async (req, res, next) => {
 const getLocation = async (req, res, next) => {
   try {
     const driverId = req.query.driverId || getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
+    const isMock = Boolean(Driver.findOne?._isMockFunction);
+    const dbStatus = getDBStatus();
+    const isSynthetic = syntheticDataService.isSyntheticMode() || !dbStatus.isConnected;
 
-    if (syntheticDataService.isSyntheticMode() && !Boolean(Driver.findOne?._isMockFunction)) {
-      const synDriver = syntheticDataService.getSyntheticDrivers().find((d) => d.driverId === driverId);
+    if (isSynthetic && !isMock) {
+      const synDriver = syntheticDataService.getSyntheticDrivers().find(
+        (d) => d.driverId === driverId || d.driverId === effectiveDriverId
+      ) || syntheticDataService.getSyntheticDrivers()[0];
+
       if (synDriver && synDriver.currentLocation) {
         return res.status(200).json({
           success: true,
@@ -553,11 +607,12 @@ const getLocation = async (req, res, next) => {
 const getHistory = async (req, res, next) => {
   try {
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
 
-    if (syntheticDataService.isSyntheticMode()) {
+    if (syntheticDataService.isSyntheticMode() || !getDBStatus().isConnected) {
       const allSynthetic = syntheticDataService.getSyntheticComplaints();
       const history = allSynthetic
-        .filter((c) => c.assignedDriverId === driverId && (c.status === 'CLEANED' || c.status === 'VERIFIED'))
+        .filter((c) => (c.assignedDriverId === driverId || c.assignedDriverId === effectiveDriverId) && (c.status === 'CLEANED' || c.status === 'VERIFIED'))
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       return res.status(200).json({
         success: true,
@@ -586,6 +641,19 @@ const updateAvailability = async (req, res, next) => {
     const { availability } = req.body;
     if (!['AVAILABLE', 'OFFLINE'].includes(availability)) return res.status(400).json({ success: false, message: 'Choose AVAILABLE or OFFLINE. BUSY is managed by assignment.' });
     const driverId = getDriverId(req.user);
+    const effectiveDriverId = resolveEffectiveDriverId(driverId, req.user);
+    const isMock = Boolean(Driver.findOneAndUpdate?._isMockFunction);
+    const dbStatus = getDBStatus();
+    const isSynthetic = syntheticDataService.isSyntheticMode() || !dbStatus.isConnected;
+
+    if (isSynthetic && !isMock) {
+      syntheticDataService.updateSyntheticDriverAvailability(driverId, availability);
+      if (driverId !== effectiveDriverId) {
+        syntheticDataService.updateSyntheticDriverAvailability(effectiveDriverId, availability);
+      }
+      return res.json({ success: true, data: { availability } });
+    }
+
     const { withTransaction } = require('../services/transactionService');
     const { ACTIVE_STATUSES } = require('../services/dispatchService');
     await withTransaction(async session => {
